@@ -19,16 +19,13 @@ type Link struct {
 	Extras   string `parquet:"name=extras, type=UTF8, encoding=PLAIN_DICTIONARY"`
 }
 
-
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	inputFile := os.Args[1]
-	readersCount,_ := strconv.ParseInt(os.Args[2], 10, 32)
-	writersCount,_ := strconv.ParseInt(os.Args[3], 10, 32)
-	maxLinkPerParquet,_ := strconv.ParseInt(os.Args[4], 10, 32)
-
-
+	readersCount, _ := strconv.ParseInt(os.Args[2], 10, 32)
+	writersCount, _ := strconv.ParseInt(os.Args[3], 10, 32)
+	maxLinkPerParquet, _ := strconv.ParseInt(os.Args[4], 10, 32)
 
 	lines, err := readLines(inputFile)
 	if err != nil {
@@ -43,16 +40,18 @@ func main() {
 	warcPathsChannel := make(chan string, 150)
 	writersChannel := make(chan *[]Link, 150)
 
+	logger := NewLogger()
+	go logger.run()
+
 	for w := 1; w <= int(readersCount); w++ {
 		readersWaitGroup.Add(1)
-		go readerWorker(warcPathsChannel, writersChannel, &readersWaitGroup )
+		go readerWorker(warcPathsChannel, writersChannel, &readersWaitGroup, logger)
 	}
 
 	for w := 1; w <= int(writersCount); w++ {
 		writersWaitGroup.Add(1)
-		go writerWorker(writersChannel, &writersWaitGroup, maxLinkPerParquet)
+		go writerWorker(writersChannel, &writersWaitGroup, maxLinkPerParquet, logger)
 	}
-
 
 	for _, line := range lines {
 		//fmt.Println(i)
@@ -64,9 +63,11 @@ func main() {
 	readersWaitGroup.Wait()
 
 	close(writersChannel)
+
 	writersWaitGroup.Wait()
 
-	fmt.Println("Job completed in:", time.Now().Sub(start))
+	logger.quit()
 
+	fmt.Println("Job completed in:", time.Now().Sub(start))
 
 }

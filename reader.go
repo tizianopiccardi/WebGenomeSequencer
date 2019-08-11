@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/PuerkitoBio/purell"
 	"github.com/slyrz/warc"
 	"golang.org/x/net/html"
@@ -19,7 +18,11 @@ var locationRegex *regexp.Regexp = regexp.MustCompile(`\nLocation: ([^\n]*)\n`)
 
 const CHUNK_SIZE = 100000
 
-func readerWorker(jobs chan string, writersChannel chan *[]Link, readersWaitGroup *sync.WaitGroup) {
+var readerID uint64
+
+func readerWorker(jobs chan string, writersChannel chan *[]Link, readersWaitGroup *sync.WaitGroup, logger Logger) {
+	//id := atomic.AddUint64(&writerID, 1)
+
 	for path := range jobs {
 
 		file, err := os.Open(path)
@@ -32,10 +35,11 @@ func readerWorker(jobs chan string, writersChannel chan *[]Link, readersWaitGrou
 		tmp := make([]Link, 0)
 		var linksBuffer *[]Link = &tmp
 
-		fmt.Println(path)
+		//fmt.Println(path)
+		logger.FileStartChannel <- path
 		for {
 
-			if len(*linksBuffer)>=CHUNK_SIZE {
+			if len(*linksBuffer) >= CHUNK_SIZE {
 				writersChannel <- linksBuffer
 				tmp := make([]Link, 0)
 				linksBuffer = &tmp
@@ -62,7 +66,6 @@ func readerWorker(jobs chan string, writersChannel chan *[]Link, readersWaitGrou
 						pageUrl, err := url.Parse(originalUrl)
 
 						//println(originalUrl)
-
 
 						if err != nil {
 
@@ -105,8 +108,7 @@ func readerWorker(jobs chan string, writersChannel chan *[]Link, readersWaitGrou
 												Link{
 													Date:   recordDate.Unix(),
 													Source: normalizedPageUrl,
-													Link:   absoluteUrl, Tag:
-													httpStatusCode})
+													Link:   absoluteUrl, Tag: httpStatusCode})
 											//fmt.Println(Link{
 											//	Date: recordDate.Unix(),
 											//	Source:normalizedPageUrl,
@@ -132,6 +134,8 @@ func readerWorker(jobs chan string, writersChannel chan *[]Link, readersWaitGrou
 		writersChannel <- linksBuffer
 
 		reader.Close()
+
+		logger.FileEndChannel <- path
 	}
 	readersWaitGroup.Done()
 }
