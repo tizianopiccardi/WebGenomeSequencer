@@ -3,12 +3,17 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"runtime"
 	"strconv"
 	"sync"
 	"time"
 )
+
+
+import _ "net/http/pprof"
+
 
 type Link struct {
 	Date     int64  `parquet:"name=date, type=INT64"`
@@ -19,7 +24,13 @@ type Link struct {
 	Extras   string `parquet:"name=extras, type=UTF8, encoding=PLAIN_DICTIONARY"`
 }
 
+
 func main() {
+
+	go func(){
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	inputFile := os.Args[1]
@@ -44,7 +55,7 @@ func main() {
 	go logger.run()
 
 	for w := 1; w <= int(readersCount); w++ {
-		readersWaitGroup.Add(1)
+		readersWaitGroup.Add(1 )
 		go readerWorker(warcPathsChannel, writersChannel, &readersWaitGroup, logger)
 	}
 

@@ -51,9 +51,9 @@ func NewLinksWriter(fileName string, maxLinkPerParquet int64, logger Logger) (Li
 }
 
 func (lw LinksWriter) write(link Link) {
-	if err := lw.parquetWriter.Write(link); err != nil {
-		log.Println("Write error", err)
-	}
+		if err := lw.parquetWriter.Write(link); err != nil {
+			log.Println("Write error", err)
+		}
 	//lw.RowsCount++
 }
 
