@@ -1,4 +1,6 @@
 links/
 .idea/
 .DS_Store
-list.txt
+*.txt
+*.paths
+*.gz

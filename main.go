@@ -5,38 +5,24 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"runtime"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
 )
 
-
 import _ "net/http/pprof"
 
-
-type Link struct {
-	Date     int64  `parquet:"name=date, type=INT64"`
-	Source   string `parquet:"name=source, type=UTF8, encoding=PLAIN_DICTIONARY"`
-	Link     string `parquet:"name=link, type=UTF8, encoding=PLAIN_DICTIONARY"`
-	Fragment string `parquet:"name=fragment, type=UTF8, encoding=PLAIN_DICTIONARY"`
-	Tag      string `parquet:"name=tag, type=UTF8, encoding=PLAIN_DICTIONARY"`
-	Extras   string `parquet:"name=extras, type=UTF8, encoding=PLAIN_DICTIONARY"`
-}
-
+const BASE_URL = "https://commoncrawl.s3.amazonaws.com/"
 
 func main() {
 
-	go func(){
-		log.Println(http.ListenAndServe("localhost:6060", nil))
+	go func() {
+		log.Println(http.ListenAndServe(":6060", nil))
 	}()
 
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
 	inputFile := os.Args[1]
-	readersCount, _ := strconv.ParseInt(os.Args[2], 10, 32)
-	writersCount, _ := strconv.ParseInt(os.Args[3], 10, 32)
-	maxLinkPerParquet, _ := strconv.ParseInt(os.Args[4], 10, 32)
+	workersCount, _ := strconv.ParseInt(os.Args[2], 10, 32)
 
 	lines, err := readLines(inputFile)
 	if err != nil {
@@ -45,38 +31,27 @@ func main() {
 
 	start := time.Now()
 
-	var readersWaitGroup sync.WaitGroup
-	var writersWaitGroup sync.WaitGroup
+	var workersWaitGroup sync.WaitGroup
 
-	warcPathsChannel := make(chan string, 150)
-	writersChannel := make(chan *[]Link, 150)
+	pathsChannel := make(chan SourceDestination, 150)
 
 	logger := NewLogger()
 	go logger.run()
 
-	for w := 1; w <= int(readersCount); w++ {
-		readersWaitGroup.Add(1 )
-		go readerWorker(warcPathsChannel, writersChannel, &readersWaitGroup, logger)
-	}
-
-	for w := 1; w <= int(writersCount); w++ {
-		writersWaitGroup.Add(1)
-		go writerWorker(writersChannel, &writersWaitGroup, maxLinkPerParquet, logger)
+	for w := 1; w <= int(workersCount); w++ {
+		workersWaitGroup.Add(1)
+		go LinkExtractionWorker(pathsChannel, &workersWaitGroup, logger)
 	}
 
 	for _, line := range lines {
-		//fmt.Println(i)
-		warcPathsChannel <- line
+		sourceWarc := BASE_URL + line
+		file := filepath.Base(sourceWarc)
+		pathsChannel <- SourceDestination{SourceFile: sourceWarc, DestinationFile: "links/" + file}
 	}
 
-	close(warcPathsChannel)
+	close(pathsChannel)
 
-	readersWaitGroup.Wait()
-
-	close(writersChannel)
-
-	writersWaitGroup.Wait()
-
+	workersWaitGroup.Wait()
 	logger.quit()
 
 	fmt.Println("Job completed in:", time.Now().Sub(start))
