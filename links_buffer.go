@@ -42,3 +42,11 @@ func (lb *LinksBuffer) appendBuffer(linksList *LinksBuffer) {
 	}
 	lb.length += linksList.length
 }
+
+func (lb *LinksBuffer) copy() LinksBuffer {
+	copied := LinksBuffer{}
+	copied.head = lb.head
+	copied.tail = lb.tail
+	copied.length = lb.length
+	return copied
+}

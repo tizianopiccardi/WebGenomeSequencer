@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-const CHUNK_SIZE = 1000
+const CHUNK_SIZE = 500000
 
 var locationRegex *regexp.Regexp = regexp.MustCompile(`\nLocation: ([^\n]*)\n`)
 
@@ -142,9 +142,8 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 
 			// Send the chunk and allocate a new list
 
-			tmp := &linksBuffer
-			writersChannel <- tmp
-			//tmp := new(LinksBuffer)
+			copied := linksBuffer.copy()
+			writersChannel <- &copied
 			linksBuffer = LinksBuffer{}
 		}
 
@@ -369,7 +368,7 @@ func WriteParquet(destination string, writersChannel chan *LinksBuffer, failed *
 		// LOG IMPOSSIBLE TO CREATE THE FILE
 	} else {
 		//write
-		pw, err := writer.NewParquetWriter(fw, new(Link), 4)
+		pw, err := writer.NewParquetWriter(fw, new(Link), 1)
 		if err != nil {
 			failed.Set()
 			// LOG IMPOSSIBLE TO CREATE THE FILE
