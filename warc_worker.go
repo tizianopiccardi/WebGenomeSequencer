@@ -1,6 +1,8 @@
 package main
 
 import (
+	"compress/gzip"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/PuerkitoBio/purell"
@@ -397,6 +399,37 @@ func WriteParquet(destination string, writersChannel chan *LinksBuffer, failed *
 			fw.Close()
 		}
 
+	}
+
+	done <- true
+}
+
+func WriteJson(destination string, writersChannel chan *LinksBuffer, failed *abool.AtomicBool, done chan bool) {
+
+	fmt.Println("Write in", destination)
+	f, err := os.Create(destination + ".gzip")
+
+	if err != nil {
+		failed.Set()
+	} else {
+		// Create gzip writer.
+		w := gzip.NewWriter(f)
+
+		for linksChunk := range writersChannel {
+			fmt.Println("New write request:", linksChunk.length, "links")
+			for node := linksChunk.head; node != nil; node = node.next {
+
+				linkJson, err := json.Marshal(node.Link)
+				if err != nil {
+					failed.Set()
+					break
+				}
+				w.Write(linkJson)
+				w.Write([]byte("\n"))
+			}
+		}
+
+		w.Close()
 	}
 
 	done <- true

@@ -10,7 +10,6 @@ type WriteRequest struct {
 }
 
 type Logger struct {
-	//CounterChannel   chan WriteRequest
 	FileStartChannel chan SourceDestination
 	FileEndChannel   chan SourceDestination
 	Errors           chan string
@@ -18,7 +17,6 @@ type Logger struct {
 
 func NewLogger() Logger {
 	logger := Logger{}
-	//logger.CounterChannel = make(chan WriteRequest, 100)
 	logger.FileStartChannel = make(chan SourceDestination, 100)
 	logger.FileEndChannel = make(chan SourceDestination, 100)
 	logger.Errors = make(chan string, 100) //NOT USED
@@ -31,8 +29,7 @@ func (logger Logger) quit() {
 }
 
 func (logger Logger) run() {
-	//var total int64
-	//start := time.Now()
+
 	for {
 		//fmt.Println("RUNNING")
 		select {
