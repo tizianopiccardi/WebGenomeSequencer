@@ -16,7 +16,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -24,22 +23,26 @@ import (
 
 const CHUNK_SIZE = 500000
 
-var locationRegex *regexp.Regexp = regexp.MustCompile(`\nLocation: ([^\n]*)\n`)
+//var locationRegex *regexp.Regexp = regexp.MustCompile(`\nLocation: ([^\n]*)\n`)
 
 const PURELL_FLAGS = purell.FlagsUsuallySafeGreedy |
 	purell.FlagForceHTTP |
 	purell.FlagRemoveFragment |
 	purell.FlagSortQuery
 
-func getAbsoluteNormalized(pageUrl *url.URL, href string) (string, *url.URL) {
+func getAbsoluteNormalized(pageUrl *url.URL, href string) (string, string) {
 	hrefUrl, err := url.Parse(href)
+	var fragment string
 	if err == nil {
+		fragment = hrefUrl.Fragment
 		if hrefUrl.Scheme == "" {
 			hrefUrl = pageUrl.ResolveReference(hrefUrl)
+			//fmt.Println(hrefUrl.Fragment)
+
 		}
-		return purell.NormalizeURL(hrefUrl, PURELL_FLAGS), hrefUrl
+		return purell.NormalizeURL(hrefUrl, PURELL_FLAGS), fragment
 	}
-	return "", hrefUrl
+	return "", fragment
 }
 
 type SourceDestination struct {
@@ -136,7 +139,8 @@ func LinkExtractionWorker(paths chan SourceDestination, workersWaitGroup *sync.W
 
 func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, failedWriterFlag *abool.AtomicBool, logger Logger) {
 	linksBuffer := LinksBuffer{}
-
+	//var i int64
+	//var total int64
 	for {
 		if linksBuffer.length >= CHUNK_SIZE {
 
@@ -173,6 +177,7 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 
 					if err == nil {
 
+						//total++
 						normalizedPageUrl := purell.NormalizeURL(pageUrl, PURELL_FLAGS)
 
 						reader := bufio.NewReader(record.Content)
@@ -204,6 +209,11 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 								contentType = line[14:]
 							}
 
+							//if strings.HasPrefix(line, "Content-Language: ") {
+							//	i++
+							//	//fmt.Println(line)
+							//}
+
 						}
 
 						if httpStatusCode == "200" {
@@ -221,9 +231,12 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 								redirectLocation, _ = getAbsoluteNormalized(pageUrl, redirectLocation)
 							}
 
-							link := NewLink(recordDate.Unix(), normalizedPageUrl,
-								redirectLocation,
-								"", httpStatusCode, "")
+							link := NewLink(recordDate.Unix(),
+								normalizedPageUrl,
+								"",
+								"",
+								httpStatusCode,
+								redirectLocation)
 
 							linksBuffer.append(&link)
 
@@ -237,6 +250,10 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 		}
 	}
 	writersChannel <- &linksBuffer
+
+	//fmt.Println(total)
+	//fmt.Println(i)
+
 }
 
 func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, body io.Reader) *LinksBuffer {
@@ -273,7 +290,7 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 				//fmt.Println(hrefValue)
 				if !strings.HasPrefix(hrefValue, "javascript:") &&
 					!strings.HasPrefix(hrefValue, "#") {
-					normalizedHrefValue, hrefObject := getAbsoluteNormalized(pageUrl, hrefValue)
+					normalizedHrefValue, fragment := getAbsoluteNormalized(pageUrl, hrefValue)
 					//fmt.Println(normalizedHrefValue)
 					if len(normalizedHrefValue) > 0 {
 
@@ -300,7 +317,7 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 						link := NewLink(crawlingTime,
 							*normalizedPageUrl,
 							normalizedHrefValue,
-							hrefObject.Fragment,
+							fragment,
 							token.Data,
 							extrasString)
 
@@ -348,13 +365,15 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 				}
 
 				if linkAttributeFound && len(hrefValue) > 0 {
-					normalizedHrefValue, hrefObject := getAbsoluteNormalized(pageUrl, hrefValue)
-					if hrefObject == nil {
+					normalizedHrefValue, fragment := getAbsoluteNormalized(pageUrl, hrefValue)
 
-					} else {
-						link := NewLink(crawlingTime, *normalizedPageUrl,
+					if len(normalizedHrefValue) > 0 {
+						link := NewLink(crawlingTime,
+							*normalizedPageUrl,
 							normalizedHrefValue,
-							hrefObject.Fragment, token.Data, extrasValue)
+							fragment,
+							token.Data,
+							extrasValue)
 
 						pageLinks.append(&link)
 					}

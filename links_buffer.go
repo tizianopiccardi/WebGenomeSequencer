@@ -23,7 +23,7 @@ type LinksBuffer struct {
 }
 
 func NewExistsLink(date int64, source string) Link {
-	return NewLink(date, source, "", "", "exists", "")
+	return NewLink(date, source, "", "", "200", "")
 }
 
 func ToValidUTF8(text string) string {

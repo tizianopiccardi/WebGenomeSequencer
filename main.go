@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -11,15 +10,15 @@ import (
 	"time"
 )
 
-import _ "net/http/pprof"
+//import _ "net/http/pprof"
 
 const BASE_URL = "https://commoncrawl.s3.amazonaws.com/"
 
 func main() {
 
-	go func() {
-		log.Println(http.ListenAndServe(":6060", nil))
-	}()
+	//go func() {
+	//	log.Println(http.ListenAndServe(":6060", nil))
+	//}()
 
 	inputFile := os.Args[1]
 	workersCount, _ := strconv.ParseInt(os.Args[2], 10, 32)
