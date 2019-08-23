@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"github.com/PuerkitoBio/purell"
@@ -10,8 +11,8 @@ import (
 	"github.com/xitongsys/parquet-go/parquet"
 	"github.com/xitongsys/parquet-go/writer"
 	"golang.org/x/net/html"
+	"golang.org/x/net/html/charset"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,7 +20,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 )
 
 const CHUNK_SIZE = 500000
@@ -54,6 +54,12 @@ func isValidUrl(toTest string) bool {
 	} else {
 		return true
 	}
+}
+
+func getCharsetReader(reader *bufio.Reader, contentType string) io.Reader {
+	bodySample, _ := reader.Peek(1024)
+	encoding, _, _ := charset.DetermineEncoding(bodySample, contentType)
+	return encoding.NewDecoder().Reader(reader)
 }
 
 func getReader(path string) (io.ReadCloser, error) {
@@ -156,10 +162,10 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 			break
 		} else {
 
-			contentType := record.Header.Get("content-type")
+			warcContentType := record.Header.Get("content-type")
 			recordType := record.Header.Get("warc-type")
 
-			if recordType == "response" && strings.HasPrefix(contentType, "application/http") {
+			if recordType == "response" && strings.HasPrefix(warcContentType, "application/http") {
 				recordDate, err := time.Parse(time.RFC3339, record.Header.Get("warc-date"))
 				if err == nil {
 					originalUrl := record.Header.Get("WARC-Target-URI")
@@ -169,44 +175,58 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 
 						normalizedPageUrl := purell.NormalizeURL(pageUrl, PURELL_FLAGS)
 
-						buf := make([]byte, 12)
-						n, err := record.Content.Read(buf)
+						reader := bufio.NewReader(record.Content)
+						var httpStatusCode string
+						var redirectLocation string
+						var contentType string
 
-						if err == nil && n == 12 {
-							httpStatusCode := string(buf[9:12])
+						for {
+							lineBytes, _, err := reader.ReadLine()
 
-							// OK response
-							if httpStatusCode == "200" {
-								contentBytes, err := ioutil.ReadAll(record.Content)
-								if err == nil {
-									content := string(contentBytes)
-									pageLinks := getLinks(recordDate.Unix(), pageUrl, &normalizedPageUrl, &content)
-									linksBuffer.appendBuffer(pageLinks)
-								}
-							} else {
-
-								var absoluteUrl string
-								if strings.HasPrefix(httpStatusCode, "3") {
-									//Redirect 3xx will add in the Link filed the destination
-									contentBytes, err := ioutil.ReadAll(record.Content)
-									if err == nil {
-										responseBody := string(contentBytes)
-										locationString := locationRegex.FindStringSubmatch(responseBody)
-										if len(locationString) > 1 {
-											redirectionUrl := strings.TrimSpace(locationString[1])
-											absoluteUrl, _ = getAbsoluteNormalized(pageUrl, redirectionUrl)
-										}
-									}
-								}
-
-								link := Link{
-									Date:   recordDate.Unix(),
-									Source: normalizedPageUrl,
-									Link:   absoluteUrl,
-									Tag:    httpStatusCode}
-								linksBuffer.append(&link)
-
+							if err == io.EOF {
+								break
 							}
+							if len(lineBytes) < 1 {
+								break
+							}
+
+							line := string(lineBytes)
+
+							if strings.HasPrefix(line, "HTTP/") {
+								httpStatusCode = line[9:12]
+							}
+
+							if strings.HasPrefix(line, "Location:") {
+								redirectLocation = line[10:]
+							}
+
+							if strings.HasPrefix(line, "Content-Type:") {
+								contentType = line[14:]
+							}
+
+						}
+
+						if httpStatusCode == "200" {
+
+							if strings.HasPrefix(contentType, "text/html") {
+								customReader := getCharsetReader(reader, contentType)
+								pageLinks := getLinks(recordDate.Unix(), pageUrl, &normalizedPageUrl, customReader)
+								linksBuffer.appendBuffer(pageLinks)
+							}
+
+						} else {
+
+							if len(redirectLocation) > 0 {
+								redirectLocation = strings.TrimSpace(redirectLocation)
+								redirectLocation, _ = getAbsoluteNormalized(pageUrl, redirectLocation)
+							}
+
+							link := NewLink(recordDate.Unix(), normalizedPageUrl,
+								redirectLocation,
+								"", httpStatusCode, "")
+
+							linksBuffer.append(&link)
+
 						}
 
 					}
@@ -219,17 +239,18 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 	writersChannel <- &linksBuffer
 }
 
-func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, body *string) *LinksBuffer {
+func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, body io.Reader) *LinksBuffer {
 	//Links in the current page
 	pageLinks := LinksBuffer{}
 
 	//Initialise tokenizer
-	tokenizer := html.NewTokenizer(strings.NewReader(*body))
+	tokenizer := html.NewTokenizer(body)
 
-	pageExistsMarker := Link{Source: *normalizedPageUrl,
-		Date: crawlingTime,
-		Tag:  "exists",
-	}
+	pageExistsMarker := NewExistsLink(crawlingTime, *normalizedPageUrl)
+	//	Link{Source: *normalizedPageUrl,
+	//	Date: crawlingTime,
+	//	Tag:  "exists",
+	//}
 
 	pageLinks.append(&pageExistsMarker)
 
@@ -276,27 +297,13 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 							extrasString = extrasString[:256]
 						}
 
-						//if !utf8.ValidString(normalizedHrefValue) &&
-						//	!strings.HasPrefix(normalizedHrefValue,"http://aouclass.net")&&
-						//	!strings.HasPrefix(*normalizedPageUrl,"http://awabi")&&
-						//	!strings.HasPrefix(*normalizedPageUrl,"http://comic2"){
-						//	fmt.Println(*body)
-						//	fmt.Println(normalizedHrefValue)
-						//}
+						link := NewLink(crawlingTime,
+							*normalizedPageUrl,
+							normalizedHrefValue,
+							hrefObject.Fragment,
+							token.Data,
+							extrasString)
 
-						if !utf8.ValidString(extrasString) {
-							fmt.Println(*body)
-							fmt.Println(extrasString)
-						}
-
-						link := Link{
-							Source:   *normalizedPageUrl,
-							Date:     crawlingTime,
-							Tag:      token.Data,
-							Extras:   extrasString,
-							Fragment: hrefObject.Fragment,
-							Link:     normalizedHrefValue,
-						}
 						pageLinks.append(&link)
 					} else {
 						//LINK NORMALIZATION FAILED
@@ -345,14 +352,10 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 					if hrefObject == nil {
 
 					} else {
-						link := Link{
-							Source:   *normalizedPageUrl,
-							Date:     crawlingTime,
-							Tag:      token.Data,
-							Extras:   extrasValue,
-							Fragment: hrefObject.Fragment,
-							Link:     normalizedHrefValue,
-						}
+						link := NewLink(crawlingTime, *normalizedPageUrl,
+							normalizedHrefValue,
+							hrefObject.Fragment, token.Data, extrasValue)
+
 						pageLinks.append(&link)
 					}
 
@@ -390,21 +393,18 @@ func WriteParquet(destination string, writersChannel chan *LinksBuffer, failed *
 
 			pw.RowGroupSize = 128 * 1024 * 1024 //128M
 			pw.CompressionType = parquet.CompressionCodec_GZIP
-			pw.PageSize = 1024 * 1024 * 32
+			pw.PageSize = 16 * 1024 * 1024
 
 			// Iterate until it is open
 			for linksChunk := range writersChannel {
 				fmt.Println("New write request:", linksChunk.length, "links")
 				for node := linksChunk.head; node != nil; node = node.next {
-					//if !utf8.ValidString(node.Link.Link) || !utf8.ValidString(node.Link.Source) ||
-					//	!utf8.ValidString(node.Link.Fragment) || !utf8.ValidString(node.Link.Extras){
-					//	//fmt.Println(node.Link)
-					//}else {
+
 					if err := pw.Write(node.Link); err != nil {
 						failed.Set()
 						//LOG ERROR IN WRITING
 						break
-						//}
+
 					}
 				}
 			}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"testing"
+	"unicode/utf8"
 )
 
 var TAB = []byte{9}
@@ -38,6 +39,11 @@ type Record struct {
 }
 
 func TestURL(t *testing.T) {
+
+	s := "http://schiederhof-mittersill.at?Ein_herzliches_\x84Gr\xfc\xdf_Gott\x93&nbsp;auf_dem&nbsp;Schiederhof_in_Mittersill=&print="
+	fmt.Println(s)
+	fmt.Println(utf8.ValidString(s))
+	fmt.Println(ToValidUTF8(s))
 
 	//q, _ := url.QueryUnescape("http://schiederhof-mittersill.at/?Ein_herzliches_%84Gr%FC%DF_Gott%93%26nbsp%3Bauf_dem%26nbsp%3BSchiederhof_in_Mittersill")
 	//fmt.Println(utf8.ValidString(q))

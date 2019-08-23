@@ -1,5 +1,7 @@
 package main
 
+import "unicode/utf8"
+
 type Link struct {
 	Date     int64  `parquet:"name=date, type=INT64"`
 	Source   string `parquet:"name=source, type=UTF8, encoding=PLAIN_DICTIONARY"`
@@ -18,6 +20,51 @@ type LinksBuffer struct {
 	head   *ListNode
 	tail   *ListNode
 	length int32
+}
+
+func NewExistsLink(date int64, source string) Link {
+	return NewLink(date, source, "", "", "exists", "")
+}
+
+func ToValidUTF8(text string) string {
+	if utf8.ValidString(text) {
+		return text
+	}
+	s := []byte(text)
+	b := make([]byte, 0, len(s))
+	invalid := false // previous byte was from an invalid UTF-8 sequence
+	for i := 0; i < len(s); {
+		c := s[i]
+		if c < utf8.RuneSelf {
+			i++
+			invalid = false
+			b = append(b, byte(c))
+			continue
+		}
+		_, wid := utf8.DecodeRune(s[i:])
+		if wid == 1 {
+			i++
+			if !invalid {
+				invalid = true
+				//b = append(b, replacement...)
+			}
+			continue
+		}
+		invalid = false
+		b = append(b, s[i:i+wid]...)
+		i += wid
+	}
+	return string(b)
+}
+
+func NewLink(date int64, source, link, fragment, tag, extras string) Link {
+	return Link{Date: date,
+		Source:   ToValidUTF8(source),
+		Link:     ToValidUTF8(link),
+		Fragment: ToValidUTF8(fragment),
+		Tag:      tag,
+		Extras:   ToValidUTF8(extras),
+	}
 }
 
 func (lb *LinksBuffer) append(link *Link) {
