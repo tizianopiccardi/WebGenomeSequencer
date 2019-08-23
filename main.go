@@ -44,7 +44,7 @@ func main() {
 	}
 
 	for _, line := range lines {
-		sourceWarc := BASE_URL + line
+		sourceWarc := line
 		file := filepath.Base(sourceWarc)
 		pathsChannel <- SourceDestination{SourceFile: sourceWarc, DestinationFile: "links/" + file + ".parquet"}
 	}

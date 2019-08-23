@@ -1,8 +1,6 @@
 package main
 
 import (
-	"compress/gzip"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/PuerkitoBio/purell"
@@ -21,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const CHUNK_SIZE = 500000
@@ -277,6 +276,19 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 							extrasString = extrasString[:256]
 						}
 
+						//if !utf8.ValidString(normalizedHrefValue) &&
+						//	!strings.HasPrefix(normalizedHrefValue,"http://aouclass.net")&&
+						//	!strings.HasPrefix(*normalizedPageUrl,"http://awabi")&&
+						//	!strings.HasPrefix(*normalizedPageUrl,"http://comic2"){
+						//	fmt.Println(*body)
+						//	fmt.Println(normalizedHrefValue)
+						//}
+
+						if !utf8.ValidString(extrasString) {
+							fmt.Println(*body)
+							fmt.Println(extrasString)
+						}
+
 						link := Link{
 							Source:   *normalizedPageUrl,
 							Date:     crawlingTime,
@@ -384,10 +396,15 @@ func WriteParquet(destination string, writersChannel chan *LinksBuffer, failed *
 			for linksChunk := range writersChannel {
 				fmt.Println("New write request:", linksChunk.length, "links")
 				for node := linksChunk.head; node != nil; node = node.next {
+					//if !utf8.ValidString(node.Link.Link) || !utf8.ValidString(node.Link.Source) ||
+					//	!utf8.ValidString(node.Link.Fragment) || !utf8.ValidString(node.Link.Extras){
+					//	//fmt.Println(node.Link)
+					//}else {
 					if err := pw.Write(node.Link); err != nil {
 						failed.Set()
 						//LOG ERROR IN WRITING
 						break
+						//}
 					}
 				}
 			}
@@ -404,33 +421,34 @@ func WriteParquet(destination string, writersChannel chan *LinksBuffer, failed *
 	done <- true
 }
 
-func WriteJson(destination string, writersChannel chan *LinksBuffer, failed *abool.AtomicBool, done chan bool) {
-
-	fmt.Println("Write in", destination)
-	f, err := os.Create(destination + ".gzip")
-
-	if err != nil {
-		failed.Set()
-	} else {
-		// Create gzip writer.
-		w := gzip.NewWriter(f)
-
-		for linksChunk := range writersChannel {
-			fmt.Println("New write request:", linksChunk.length, "links")
-			for node := linksChunk.head; node != nil; node = node.next {
-
-				linkJson, err := json.Marshal(node.Link)
-				if err != nil {
-					failed.Set()
-					break
-				}
-				w.Write(linkJson)
-				w.Write([]byte("\n"))
-			}
-		}
-
-		w.Close()
-	}
-
-	done <- true
-}
+//
+//func WriteJson(destination string, writersChannel chan *LinksBuffer, failed *abool.AtomicBool, done chan bool) {
+//
+//	fmt.Println("Write in", destination)
+//	f, err := os.Create(destination + ".gzip")
+//
+//	if err != nil {
+//		failed.Set()
+//	} else {
+//		// Create gzip writer.
+//		w := gzip.NewWriter(f)
+//
+//		for linksChunk := range writersChannel {
+//			fmt.Println("New write request:", linksChunk.length, "links")
+//			for node := linksChunk.head; node != nil; node = node.next {
+//
+//				linkJson, err := json.Marshal(node.Link)
+//				if err != nil {
+//					failed.Set()
+//					break
+//				}
+//				w.Write(linkJson)
+//				w.Write([]byte("\n"))
+//			}
+//		}
+//
+//		w.Close()
+//	}
+//
+//	done <- true
+//}
