@@ -1,6 +1,8 @@
 package main
 
-import "unicode/utf8"
+import (
+	"unicode/utf8"
+)
 
 type Link struct {
 	Date     int64  `parquet:"name=date, type=INT64"`
@@ -22,8 +24,13 @@ type LinksBuffer struct {
 	length int32
 }
 
-func NewExistsLink(date int64, source string) Link {
-	return NewLink(date, source, "", "", "200", "")
+//func NewExistsLink(date int64, source string) Link {
+//	return NewLink(date, source, "", "", "200", "")
+//}
+
+func NewExistsMarker(date int64, source, httpCode, extras string) Link {
+	//fmt.Println("MARKER")
+	return NewLink(date, source, "", "", httpCode, extras)
 }
 
 func ToValidUTF8(text string) string {
@@ -80,14 +87,16 @@ func (lb *LinksBuffer) append(link *Link) {
 }
 
 func (lb *LinksBuffer) appendBuffer(linksList *LinksBuffer) {
-	if lb.head == nil {
-		lb.head = linksList.head
-		lb.tail = linksList.tail
-	} else {
-		lb.tail.next = linksList.head
-		lb.tail = linksList.tail
+	if linksList.length > 0 {
+		if lb.head == nil {
+			lb.head = linksList.head
+			lb.tail = linksList.tail
+		} else {
+			lb.tail.next = linksList.head
+			lb.tail = linksList.tail
+		}
+		lb.length += linksList.length
 	}
-	lb.length += linksList.length
 }
 
 func (lb *LinksBuffer) copy() LinksBuffer {
