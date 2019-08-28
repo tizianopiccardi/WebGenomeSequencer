@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/url"
 	"strconv"
 	"testing"
@@ -59,4 +60,25 @@ func TestURL(t *testing.T) {
 	}
 	fmt.Println(hrefUrl.Fragment)
 
+}
+
+func TestFileReader(t *testing.T) {
+	lines, err := readLines("2005-warcs.gz")
+	if err != nil {
+		log.Fatalf("readLines: %s", err)
+	}
+
+	for _, line := range lines {
+		fmt.Println(line)
+	}
+}
+
+func TestUrlParsing(t *testing.T) {
+	//page := "http://www.gb.nrao.edu/~glangsto/rfi/600"
+	relative := "http://www.aifb.uni-karlsruhe.de/Personen/viewPerson?printer=true\u0026id_db=2107\u0026gruppe_id=3"
+
+	_, err := url.Parse(relative)
+	if err != nil {
+		println(err)
+	}
 }

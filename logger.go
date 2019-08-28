@@ -1,13 +1,13 @@
 package main
 
 import (
-	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"os"
 )
 
 type Exception struct {
+	File            string
 	Source          string
 	ErrorType       string
 	Message         string
@@ -16,7 +16,7 @@ type Exception struct {
 
 type Logger struct {
 	LogsFileName   string
-	LogsFileWriter *gzip.Writer
+	LogsFileWriter *os.File
 
 	CompletedFiles       string
 	CompletedFilesWriter *os.File
@@ -30,7 +30,7 @@ func NewLogger(fileName, completedFiles string) (Logger, error) {
 	logger := Logger{LogsFileName: fileName, CompletedFiles: completedFiles}
 
 	logFile, err1 := os.Create(fileName + ".gzip")
-	cFile, err2 := os.Create(completedFiles + ".gzip")
+	cFile, err2 := os.Create(completedFiles)
 
 	if err1 != nil {
 		return logger, err1
@@ -39,7 +39,7 @@ func NewLogger(fileName, completedFiles string) (Logger, error) {
 		return logger, err2
 	}
 
-	logger.LogsFileWriter = gzip.NewWriter(logFile)
+	logger.LogsFileWriter = logFile
 	logger.CompletedFilesWriter = cFile
 
 	logger.FileStartChannel = make(chan SourceDestination, 100)
@@ -50,7 +50,14 @@ func NewLogger(fileName, completedFiles string) (Logger, error) {
 }
 
 func (logger Logger) quit() {
+	//
+	//close(logger.Exceptions)
+	//close(logger.FileEndChannel)
+	//close(logger.FileStartChannel)
+
+	//logger.LogsFileWriter.Flush()
 	logger.LogsFileWriter.Close()
+	logger.CompletedFilesWriter.Close()
 }
 
 func (logger Logger) run() {

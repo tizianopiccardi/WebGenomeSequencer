@@ -34,11 +34,7 @@ func getAbsoluteNormalized(pageUrl *url.URL, href string) (string, string) {
 	var fragment string
 	if err == nil {
 		fragment = hrefUrl.Fragment
-		if hrefUrl.Scheme == "" {
-			hrefUrl = pageUrl.ResolveReference(hrefUrl)
-			//fmt.Println(hrefUrl.Fragment)
-
-		}
+		hrefUrl = pageUrl.ResolveReference(hrefUrl)
 		return purell.NormalizeURL(hrefUrl, PURELL_FLAGS), fragment
 	}
 	return "", fragment
@@ -50,8 +46,8 @@ type SourceDestination struct {
 }
 
 func isValidUrl(toTest string) bool {
-	_, err := url.ParseRequestURI(toTest)
-	if err != nil {
+	u, _ := url.ParseRequestURI(toTest)
+	if u.Host == "" {
 		return false
 	} else {
 		return true
@@ -66,12 +62,14 @@ func getCharsetReader(reader *bufio.Reader, contentType string) io.Reader {
 
 func getReader(path string) (io.ReadCloser, error) {
 	if isValidUrl(path) {
+
 		resp, err := http.Get(path)
 		if err != nil {
 			return nil, err
 		}
 		return resp.Body, nil
 	} else {
+		//fmt.Print("HERE")
 		file, err := os.Open(path)
 		if err != nil {
 			return nil, err
@@ -91,6 +89,7 @@ func LinkExtractionWorker(paths chan SourceDestination, workersWaitGroup *sync.W
 		fileReader, err := getReader(path.SourceFile)
 		if err != nil {
 			logger.Exceptions <- Exception{
+				File:            path.SourceFile,
 				Source:          exceptionsSource,
 				ErrorType:       "File not found",
 				Message:         path.SourceFile,
@@ -104,6 +103,7 @@ func LinkExtractionWorker(paths chan SourceDestination, workersWaitGroup *sync.W
 			recordsReader, err := warc.NewReader(fileReader)
 			if err != nil {
 				logger.Exceptions <- Exception{
+					File:            path.SourceFile,
 					Source:          exceptionsSource,
 					ErrorType:       "WARC Reader failed",
 					Message:         path.SourceFile,
@@ -163,6 +163,7 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 				//LOG FAILED
 				//fmt.Println("WRITER FAILED")
 				logger.Exceptions <- Exception{
+					File:      path,
 					Source:    exceptionsSource,
 					ErrorType: "Reader controlled failure",
 					Message:   "The writer failed and the reader is interrupting the job",
@@ -180,6 +181,7 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 		if err != nil {
 			if err != io.EOF {
 				logger.Exceptions <- Exception{
+					File:            path,
 					Source:          exceptionsSource,
 					ErrorType:       "Record malformed",
 					Message:         "The reader failed to process the record",
@@ -197,6 +199,7 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 				recordDate, err := time.Parse(time.RFC3339, record.Header.Get("warc-date"))
 				if err != nil {
 					logger.Exceptions <- Exception{
+						File:            path,
 						Source:          exceptionsSource,
 						ErrorType:       "Date parsing error",
 						Message:         record.Header.Get("warc-date"),
@@ -208,6 +211,7 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 
 					if err != nil {
 						logger.Exceptions <- Exception{
+							File:            path,
 							Source:          exceptionsSource,
 							ErrorType:       "Not an URL",
 							Message:         originalUrl,
@@ -253,7 +257,7 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 
 							if strings.HasPrefix(contentType, "text/html") {
 								customReader := getCharsetReader(reader, contentType)
-								pageLinks := getLinks(recordDate.Unix(), pageUrl, &normalizedPageUrl, customReader, logger)
+								pageLinks := getLinks(recordDate.Unix(), pageUrl, &normalizedPageUrl, customReader, logger, path)
 								linksBuffer.appendBuffer(pageLinks)
 							}
 
@@ -281,7 +285,7 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 
 }
 
-func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, body io.Reader, logger Logger) *LinksBuffer {
+func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, body io.Reader, logger Logger, path string) *LinksBuffer {
 
 	exceptionsSource := "GetLinks in " + pageUrl.String()
 
@@ -303,13 +307,14 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 				var hrefValue string
 				for _, attr := range token.Attr {
 					if attr.Key == "href" {
-						hrefValue = strings.TrimSpace(attr.Val)
+						hrefValue = strings.Replace(strings.TrimSpace(attr.Val), "\n", "", -1)
 						break
 					}
 				}
 				//fmt.Println(hrefValue)
 				if !strings.HasPrefix(hrefValue, "javascript:") &&
 					!strings.HasPrefix(hrefValue, "#") {
+
 					normalizedHrefValue, fragment := getAbsoluteNormalized(pageUrl, hrefValue)
 					//fmt.Println(normalizedHrefValue)
 					if len(normalizedHrefValue) > 0 {
@@ -345,6 +350,7 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 					} else {
 						//LINK NORMALIZATION FAILED
 						logger.Exceptions <- Exception{
+							File:      path,
 							Source:    exceptionsSource,
 							ErrorType: "Link normalization failed",
 							Message:   hrefValue,

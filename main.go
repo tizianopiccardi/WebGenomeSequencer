@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -11,15 +10,15 @@ import (
 	"time"
 )
 
-import _ "net/http/pprof"
+//import _ "net/http/pprof"
 
-const BASE_URL = "https://commoncrawl.s3.amazonaws.com/"
+//const BASE_URL = "https://commoncrawl.s3.amazonaws.com/"
 
 func main() {
 
-	go func() {
-		log.Println(http.ListenAndServe(":6060", nil))
-	}()
+	//go func() {
+	//	log.Println(http.ListenAndServe(":6060", nil))
+	//}()
 
 	inputFile := os.Args[1]
 	workersCount, _ := strconv.ParseInt(os.Args[2], 10, 32)
@@ -41,7 +40,6 @@ func main() {
 		return
 	}
 	go logger.run()
-	defer logger.quit()
 
 	for w := 1; w <= int(workersCount); w++ {
 		workersWaitGroup.Add(1)
@@ -50,12 +48,14 @@ func main() {
 
 	for _, line := range lines {
 		sourceWarc := line
+		//fmt.Println(sourceWarc)
 		file := filepath.Base(sourceWarc)
 		pathsChannel <- SourceDestination{SourceFile: sourceWarc, DestinationFile: "links/" + file + ".parquet"}
 	}
 
 	close(pathsChannel)
 
+	logger.quit()
 	workersWaitGroup.Wait()
 
 	fmt.Println("Job completed in:", time.Now().Sub(start))
