@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"github.com/PuerkitoBio/purell"
 	"github.com/slyrz/warc"
 	"github.com/tevino/abool"
@@ -450,7 +449,7 @@ func WriteParquet(destination string, writersChannel chan *LinksBuffer, failed *
 
 			// Iterate until it is open
 			for linksChunk := range writersChannel {
-				fmt.Println("New write request:", linksChunk.length, "links")
+				//fmt.Println("New write request:", linksChunk.length, "links")
 				for node := linksChunk.head; node != nil; node = node.next {
 
 					if err := pw.Write(node.Link); err != nil {

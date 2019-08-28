@@ -35,8 +35,13 @@ func main() {
 
 	pathsChannel := make(chan SourceDestination, 150)
 
-	logger := NewLogger()
+	logger, err := NewLogger("all_logs.log", "completed.txt")
+	if err != nil {
+		fmt.Println("Error in creating the log file...")
+		return
+	}
 	go logger.run()
+	defer logger.quit()
 
 	for w := 1; w <= int(workersCount); w++ {
 		workersWaitGroup.Add(1)
@@ -52,7 +57,6 @@ func main() {
 	close(pathsChannel)
 
 	workersWaitGroup.Wait()
-	logger.quit()
 
 	fmt.Println("Job completed in:", time.Now().Sub(start))
 
