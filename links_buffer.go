@@ -5,12 +5,14 @@ import (
 )
 
 type Link struct {
-	Date     int64  `parquet:"name=date, type=INT64"`
-	Source   string `parquet:"name=source, type=UTF8, encoding=PLAIN_DICTIONARY"`
-	Link     string `parquet:"name=link, type=UTF8, encoding=PLAIN_DICTIONARY"`
-	Fragment string `parquet:"name=fragment, type=UTF8, encoding=PLAIN_DICTIONARY"`
-	Tag      string `parquet:"name=tag, type=UTF8, encoding=PLAIN_DICTIONARY"`
-	Extras   string `parquet:"name=extras, type=UTF8, encoding=PLAIN_DICTIONARY"`
+	Date       int64  `parquet:"name=date, type=INT64"`
+	SourceHost string `parquet:"name=source, type=UTF8, encoding=PLAIN_DICTIONARY"`
+	Secure     bool   `parquet:"name=bool, type=BOOLEAN"`
+	Source     string `parquet:"name=source, type=UTF8, encoding=PLAIN_DICTIONARY"`
+	Link       string `parquet:"name=link, type=UTF8, encoding=PLAIN_DICTIONARY"`
+	Fragment   string `parquet:"name=fragment, type=UTF8, encoding=PLAIN_DICTIONARY"`
+	Tag        string `parquet:"name=tag, type=UTF8, encoding=PLAIN_DICTIONARY"`
+	Extras     string `parquet:"name=extras, type=UTF8, encoding=PLAIN_DICTIONARY"`
 }
 
 type ListNode struct {
@@ -28,9 +30,9 @@ type LinksBuffer struct {
 //	return NewLink(date, source, "", "", "200", "")
 //}
 
-func NewExistsMarker(date int64, source, httpCode, extras string) Link {
+func NewExistsMarker(date int64, source, httpCode, extras string, secure bool, host string) Link {
 	//fmt.Println("MARKER")
-	return NewLink(date, source, "", "", httpCode, extras)
+	return NewLink(date, source, "", "", httpCode, extras, secure, host)
 }
 
 func ToValidUTF8(text string) string {
@@ -64,13 +66,15 @@ func ToValidUTF8(text string) string {
 	return string(b)
 }
 
-func NewLink(date int64, source, link, fragment, tag, extras string) Link {
+func NewLink(date int64, source, link, fragment, tag, extras string, secure bool, host string) Link {
 	return Link{Date: date,
-		Source:   ToValidUTF8(source),
-		Link:     ToValidUTF8(link),
-		Fragment: ToValidUTF8(fragment),
-		Tag:      tag,
-		Extras:   ToValidUTF8(extras),
+		Source:     ToValidUTF8(source),
+		Link:       ToValidUTF8(link),
+		Fragment:   ToValidUTF8(fragment),
+		Tag:        tag,
+		Extras:     ToValidUTF8(extras),
+		Secure:     secure,
+		SourceHost: host,
 	}
 }
 

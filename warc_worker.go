@@ -207,7 +207,22 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 					}
 				} else {
 					originalUrl := record.Header.Get("WARC-Target-URI")
+					originalUrl = strings.Replace(strings.TrimSpace(originalUrl), "\n", "", -1)
 					pageUrl, err := url.Parse(originalUrl)
+
+					isSecure := false
+					if strings.HasPrefix(originalUrl, "https") {
+						isSecure = true
+					}
+
+					pageHostParts := strings.Split(pageUrl.Host, ".")
+
+					for i := 0; i < len(pageHostParts)/2; i++ {
+						j := len(pageHostParts) - i - 1
+						pageHostParts[i], pageHostParts[j] = pageHostParts[j], pageHostParts[i]
+					}
+
+					invertedPageHost := strings.Join(pageHostParts, ".")
 
 					if err != nil {
 						logger.Exceptions <- Exception{
@@ -257,7 +272,7 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 
 							if strings.HasPrefix(contentType, "text/html") {
 								customReader := getCharsetReader(reader, contentType)
-								pageLinks := getLinks(recordDate.Unix(), pageUrl, &normalizedPageUrl, customReader, logger, path)
+								pageLinks := getLinks(recordDate.Unix(), pageUrl, &normalizedPageUrl, customReader, logger, path, isSecure, invertedPageHost)
 								linksBuffer.appendBuffer(pageLinks)
 							}
 
@@ -271,7 +286,7 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 						}
 
 						// Add the marker to know that the crawler visited the page
-						link := NewExistsMarker(recordDate.Unix(), normalizedPageUrl, httpStatusCode, extras)
+						link := NewExistsMarker(recordDate.Unix(), normalizedPageUrl, httpStatusCode, extras, isSecure, invertedPageHost)
 						linksBuffer.append(&link)
 
 					}
@@ -285,7 +300,7 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 
 }
 
-func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, body io.Reader, logger Logger, path string) *LinksBuffer {
+func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, body io.Reader, logger Logger, path string, mainPageSecure bool, invertedPageHost string) *LinksBuffer {
 
 	exceptionsSource := "GetLinks in " + pageUrl.String()
 
@@ -315,6 +330,10 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 				if !strings.HasPrefix(hrefValue, "javascript:") &&
 					!strings.HasPrefix(hrefValue, "#") {
 
+					isSecure := mainPageSecure
+					if strings.HasPrefix(hrefValue, "https:") {
+						isSecure = true
+					}
 					normalizedHrefValue, fragment := getAbsoluteNormalized(pageUrl, hrefValue)
 					//fmt.Println(normalizedHrefValue)
 					if len(normalizedHrefValue) > 0 {
@@ -344,7 +363,8 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 							normalizedHrefValue,
 							fragment,
 							token.Data,
-							extrasString)
+							extrasString,
+							isSecure, invertedPageHost)
 
 						pageLinks.append(&link)
 					} else {
@@ -396,6 +416,12 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 				}
 
 				if linkAttributeFound && len(hrefValue) > 0 {
+
+					isSecure := mainPageSecure
+					if strings.HasPrefix(hrefValue, "https:") {
+						isSecure = true
+					}
+
 					normalizedHrefValue, fragment := getAbsoluteNormalized(pageUrl, hrefValue)
 
 					if len(normalizedHrefValue) > 0 {
@@ -404,7 +430,8 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 							normalizedHrefValue,
 							fragment,
 							token.Data,
-							extrasValue)
+							extrasValue,
+							isSecure, invertedPageHost)
 
 						pageLinks.append(&link)
 					}
