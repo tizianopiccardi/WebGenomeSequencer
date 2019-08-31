@@ -29,7 +29,7 @@ type Logger struct {
 func NewLogger(fileName, completedFiles string) (Logger, error) {
 	logger := Logger{LogsFileName: fileName, CompletedFiles: completedFiles}
 
-	logFile, err1 := os.Create(fileName + ".gzip")
+	logFile, err1 := os.Create(fileName)
 	cFile, err2 := os.Create(completedFiles)
 
 	if err1 != nil {

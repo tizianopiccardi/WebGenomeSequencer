@@ -34,7 +34,7 @@ func main() {
 
 	pathsChannel := make(chan SourceDestination, 150)
 
-	logger, err := NewLogger("all_logs.log", "completed.txt")
+	logger, err := NewLogger("errors.log", "completed.txt")
 	if err != nil {
 		fmt.Println("Error in creating the log file...")
 		return
@@ -50,7 +50,7 @@ func main() {
 		sourceWarc := line
 		//fmt.Println(sourceWarc)
 		file := filepath.Base(sourceWarc)
-		pathsChannel <- SourceDestination{SourceFile: sourceWarc, DestinationFile: "links/" + file + ".parquet"}
+		pathsChannel <- SourceDestination{SourceFile: sourceWarc, DestinationFile: "webgenome/" + file + ".parquet"}
 	}
 
 	close(pathsChannel)
