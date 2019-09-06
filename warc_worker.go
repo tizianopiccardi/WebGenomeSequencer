@@ -210,19 +210,6 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 					originalUrl = strings.Replace(strings.TrimSpace(originalUrl), "\n", "", -1)
 					pageUrl, err := url.Parse(originalUrl)
 
-					isSecure := false
-					if strings.HasPrefix(originalUrl, "https") {
-						isSecure = true
-					}
-
-					pageHostParts := strings.Split(pageUrl.Host, ".")
-
-					for i := 0; i < len(pageHostParts)/2; i++ {
-						j := len(pageHostParts) - i - 1
-						pageHostParts[i], pageHostParts[j] = pageHostParts[j], pageHostParts[i]
-					}
-
-					invertedPageHost := strings.Join(pageHostParts, ".")
 
 					if err != nil {
 						logger.Exceptions <- Exception{
@@ -233,6 +220,21 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 							OriginalMessage: err.Error(),
 						}
 					} else {
+
+						isSecure := false
+						if strings.HasPrefix(originalUrl, "https") {
+							isSecure = true
+						}
+
+						pageHostParts := strings.Split(pageUrl.Host, ".")
+
+						for i := 0; i < len(pageHostParts)/2; i++ {
+							j := len(pageHostParts) - i - 1
+							pageHostParts[i], pageHostParts[j] = pageHostParts[j], pageHostParts[i]
+						}
+
+						invertedPageHost := strings.Join(pageHostParts, ".")
+
 
 						normalizedPageUrl := purell.NormalizeURL(pageUrl, PURELL_FLAGS)
 

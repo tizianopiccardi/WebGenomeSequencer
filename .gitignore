@@ -5,3 +5,4 @@ links/
 *.paths
 *.gz
 .ipynb_checkpoints/
+*.log
