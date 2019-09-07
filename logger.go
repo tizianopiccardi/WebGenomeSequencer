@@ -50,20 +50,16 @@ func NewLogger(fileName, completedFiles string) (Logger, error) {
 }
 
 func (logger Logger) quit() {
-	//
-	//close(logger.Exceptions)
-	//close(logger.FileEndChannel)
-	//close(logger.FileStartChannel)
 
-	//logger.LogsFileWriter.Flush()
+	logger.LogsFileWriter.Sync()
 	logger.LogsFileWriter.Close()
+	logger.CompletedFilesWriter.Sync()
 	logger.CompletedFilesWriter.Close()
 }
 
 func (logger Logger) run() {
 
 	for {
-		//fmt.Println("RUNNING")
 		select {
 		case e := <-logger.Exceptions:
 			jsonError, _ := json.Marshal(e)
@@ -73,9 +69,9 @@ func (logger Logger) run() {
 		case fileStarted := <-logger.FileStartChannel:
 			fmt.Println("New file started:", fileStarted.SourceFile)
 		case fileEnd := <-logger.FileEndChannel:
-			fmt.Println("File completed:", fileEnd.SourceFile)
 			logger.CompletedFilesWriter.Write([]byte(fileEnd.SourceFile))
 			logger.CompletedFilesWriter.Write([]byte("\n"))
+			fmt.Println("File completed:", fileEnd.SourceFile)
 		}
 	}
 }
