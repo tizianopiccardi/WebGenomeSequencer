@@ -366,7 +366,8 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 							fragment,
 							token.Data,
 							extrasString,
-							isSecure, invertedPageHost)
+							isSecure,
+							invertedPageHost)
 
 						pageLinks.append(&link)
 					} else {
@@ -433,7 +434,8 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 							fragment,
 							token.Data,
 							extrasValue,
-							isSecure, invertedPageHost)
+							isSecure,
+							invertedPageHost)
 
 						pageLinks.append(&link)
 					}

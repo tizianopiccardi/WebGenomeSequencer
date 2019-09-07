@@ -50,7 +50,7 @@ func main() {
 		sourceWarc := line
 		//fmt.Println(sourceWarc)
 		file := filepath.Base(sourceWarc)
-		pathsChannel <- SourceDestination{SourceFile: sourceWarc, DestinationFile: "webgenome/" + file + ".parquet"}
+		pathsChannel <- SourceDestination{SourceFile: sourceWarc, DestinationFile: "/Users/pirroh/src/WebGenomeSequencer/webgenome/" + file + ".parquet"}
 	}
 
 	close(pathsChannel)

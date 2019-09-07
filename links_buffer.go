@@ -68,13 +68,13 @@ func ToValidUTF8(text string) string {
 
 func NewLink(date int64, source, link, fragment, tag, extras string, secure bool, host string) Link {
 	return Link{Date: date,
+		SourceHost: host,
+		Secure:     secure,
 		Source:     ToValidUTF8(source),
 		Link:       ToValidUTF8(link),
 		Fragment:   ToValidUTF8(fragment),
 		Tag:        tag,
 		Extras:     ToValidUTF8(extras),
-		Secure:     secure,
-		SourceHost: host,
 	}
 }
 
