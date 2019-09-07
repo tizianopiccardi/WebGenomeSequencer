@@ -21,11 +21,16 @@ func main() {
 	//}()
 
 	inputFile := os.Args[1]
-	workersCount, _ := strconv.ParseInt(os.Args[2], 10, 32)
+	outputPath := os.Args[2]
+	workersCount, _ := strconv.ParseInt(os.Args[3], 10, 32)
 
 	lines, err := readLines(inputFile)
 	if err != nil {
 		log.Fatalf("readLines: %s", err)
+	}
+	err = os.MkdirAll(outputPath, os.ModePerm)
+	if err != nil {
+		log.Fatalf("Unable to create the output directory: %s", err)
 	}
 
 	start := time.Now()
@@ -50,13 +55,14 @@ func main() {
 		sourceWarc := line
 		//fmt.Println(sourceWarc)
 		file := filepath.Base(sourceWarc)
-		pathsChannel <- SourceDestination{SourceFile: sourceWarc, DestinationFile: "/Users/pirroh/src/WebGenomeSequencer/webgenome/" + file + ".parquet"}
+		pathsChannel <- SourceDestination{SourceFile: sourceWarc, DestinationFile: outputPath + "/" + file + ".parquet"}
 	}
 
 	close(pathsChannel)
 
-	logger.quit()
+
 	workersWaitGroup.Wait()
+	logger.quit()
 
 	fmt.Println("Job completed in:", time.Now().Sub(start))
 

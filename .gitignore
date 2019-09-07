@@ -1,8 +1,10 @@
-links/
-.idea/
-.DS_Store
+webgenome/
+
 *.txt
 *.paths
 *.gz
-.ipynb_checkpoints/
 *.log
+
+.idea/
+.ipynb_checkpoints/
+.DS_Store
