@@ -4,37 +4,11 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"strconv"
 	"strings"
 	"testing"
 )
 
-var TAB = []byte{9}
-var NL = []byte{10}
-
-func TestList(t *testing.T) {
-	buffer := LinksBuffer{}
-	for i := 0; i < 10; i++ {
-		link := Link{Link: strconv.Itoa(i)}
-		buffer.append(&link)
-	}
-
-	buffer2 := LinksBuffer{}
-	for i := 10; i < 30; i++ {
-		link := Link{Link: strconv.Itoa(i)}
-		buffer2.append(&link)
-	}
-
-	buffer.appendBuffer(&buffer2)
-
-	fmt.Println("List length:", buffer.length)
-
-	for node := buffer.head; node != nil; node = node.next {
-		fmt.Print(node.Link.Link, "|")
-	}
-	fmt.Println("")
-
-}
+// TODO: fix all the tests
 
 type Record struct {
 	Value string `parquet:"name=value, type=UTF8, encoding=PLAIN_DICTIONARY"`
