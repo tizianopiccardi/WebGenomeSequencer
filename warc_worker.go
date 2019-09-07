@@ -113,7 +113,7 @@ func LinkExtractionWorker(paths chan SourceDestination, workersWaitGroup *sync.W
 			} else {
 
 				// Channel to share the chucks to write
-				writerChannel := make(chan *LinksBuffer, 150)
+				writerChannel := make(chan *MarkersList, 150)
 
 				// Synchronized boolean var to inform the reader if the writer filed
 				failedWriterFlag := abool.New()
@@ -148,15 +148,15 @@ func LinkExtractionWorker(paths chan SourceDestination, workersWaitGroup *sync.W
 	workersWaitGroup.Done()
 }
 
-func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, failedWriterFlag *abool.AtomicBool, logger Logger, path string) {
-	linksBuffer := LinksBuffer{}
+func ReadWarc(recordsReader *warc.Reader, writersChannel chan *MarkersList, failedWriterFlag *abool.AtomicBool, logger Logger, path string) {
+	markersBuffer := MarkersList{}
 	//var i int64
 	//var total int64
 
 	exceptionsSource := "Reader " + path
 
 	for {
-		if linksBuffer.length >= CHUNK_SIZE {
+		if markersBuffer.length >= CHUNK_SIZE {
 
 			// If the writer is dead, stop the reader
 			if failedWriterFlag.IsSet() {
@@ -172,9 +172,9 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 			}
 
 			// Send the chunk and allocate a new list
-			copied := linksBuffer.copy()
+			copied := markersBuffer.copy()
 			writersChannel <- &copied
-			linksBuffer = LinksBuffer{}
+			markersBuffer = MarkersList{}
 		}
 
 		record, err := recordsReader.ReadRecord()
@@ -275,7 +275,7 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 							if strings.HasPrefix(contentType, "text/html") {
 								customReader := getCharsetReader(reader, contentType)
 								pageLinks := getLinks(recordDate.Unix(), pageUrl, &normalizedPageUrl, customReader, logger, path, isSecure, invertedPageHost)
-								linksBuffer.appendBuffer(pageLinks)
+								markersBuffer.appendList(pageLinks)
 							}
 
 						} else {
@@ -288,8 +288,8 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 						}
 
 						// Add the marker to know that the crawler visited the page
-						link := NewExistsMarker(recordDate.Unix(), normalizedPageUrl, httpStatusCode, extras, isSecure, invertedPageHost)
-						linksBuffer.append(&link)
+						link := NewWebpageMarker(recordDate.Unix(), invertedPageHost, isSecure, normalizedPageUrl, httpStatusCode, extras)
+						markersBuffer.append(&link)
 
 					}
 
@@ -298,16 +298,16 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *LinksBuffer, fail
 
 		}
 	}
-	writersChannel <- &linksBuffer
+	writersChannel <- &markersBuffer
 
 }
 
-func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, body io.Reader, logger Logger, path string, mainPageSecure bool, invertedPageHost string) *LinksBuffer {
+func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, body io.Reader, logger Logger, path string, mainPageSecure bool, invertedPageHost string) *MarkersList {
 
 	exceptionsSource := "GetLinks in " + pageUrl.String()
 
 	//Links in the current page
-	pageLinks := LinksBuffer{}
+	pageLinks := MarkersList{}
 
 	//Initialise tokenizer
 	tokenizer := html.NewTokenizer(body)
@@ -360,14 +360,15 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 							extrasString = extrasString[:256]
 						}
 
-						link := NewLink(crawlingTime,
+						link := NewMarker(
+							crawlingTime,
+							invertedPageHost,
+							isSecure,
 							*normalizedPageUrl,
 							normalizedHrefValue,
 							fragment,
 							token.Data,
-							extrasString,
-							isSecure,
-							invertedPageHost)
+							extrasString)
 
 						pageLinks.append(&link)
 					} else {
@@ -428,14 +429,15 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 					normalizedHrefValue, fragment := getAbsoluteNormalized(pageUrl, hrefValue)
 
 					if len(normalizedHrefValue) > 0 {
-						link := NewLink(crawlingTime,
+						link := NewMarker(
+							crawlingTime,
+							invertedPageHost,
+							isSecure,
 							*normalizedPageUrl,
 							normalizedHrefValue,
 							fragment,
 							token.Data,
-							extrasValue,
-							isSecure,
-							invertedPageHost)
+							extrasValue)
 
 						pageLinks.append(&link)
 					}
@@ -457,7 +459,7 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 	return &pageLinks
 }
 
-func WriteParquet(destination string, writersChannel chan *LinksBuffer, failed *abool.AtomicBool, done chan bool, logger Logger) {
+func WriteParquet(destination string, writersChannel chan *MarkersList, failed *abool.AtomicBool, done chan bool, logger Logger) {
 
 	exceptionsSource := "Writer " + destination
 
@@ -474,7 +476,7 @@ func WriteParquet(destination string, writersChannel chan *LinksBuffer, failed *
 		// LOG IMPOSSIBLE TO CREATE THE FILE
 	} else {
 		//write
-		pw, err := writer.NewParquetWriter(fw, new(Link), 1)
+		pw, err := writer.NewParquetWriter(fw, new(Marker), 1)
 		if err != nil {
 			failed.Set()
 			// LOG IMPOSSIBLE TO CREATE THE FILE
@@ -488,8 +490,7 @@ func WriteParquet(destination string, writersChannel chan *LinksBuffer, failed *
 			for linksChunk := range writersChannel {
 				//fmt.Println("New write request:", linksChunk.length, "links")
 				for node := linksChunk.head; node != nil; node = node.next {
-
-					if err := pw.Write(node.Link); err != nil {
+					if err := pw.Write(node.Marker); err != nil {
 						failed.Set()
 						logger.Exceptions <- Exception{
 							Source:          exceptionsSource,
