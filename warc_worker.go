@@ -80,7 +80,7 @@ func getReader(path string) (io.ReadCloser, error) {
 	return nil, errors.New("URL/path not valid: " + path)
 }
 
-func LinkExtractionWorker(paths chan SourceDestination, workersWaitGroup *sync.WaitGroup, logger Logger) {
+func LinkExtractionWorker(dataOrigin string, paths chan SourceDestination, workersWaitGroup *sync.WaitGroup, logger Logger) {
 
 	exceptionsSource := ""
 
@@ -126,7 +126,7 @@ func LinkExtractionWorker(paths chan SourceDestination, workersWaitGroup *sync.W
 				// - The reader checks regularly the flag, if it's TRUE: break
 				go WriteParquet(path.DestinationFile, writerChannel, failedWriterFlag, writerDone, logger)
 
-				ReadWarc(recordsReader, writerChannel, failedWriterFlag, logger, path.SourceFile)
+				ReadWarc(dataOrigin, recordsReader, writerChannel, failedWriterFlag, logger, path.SourceFile)
 
 				// The reader ended, the file if completely processed and we can
 				// inform the writer by closing the channel
@@ -148,7 +148,7 @@ func LinkExtractionWorker(paths chan SourceDestination, workersWaitGroup *sync.W
 	workersWaitGroup.Done()
 }
 
-func ReadWarc(recordsReader *warc.Reader, writersChannel chan *MarkersList, failedWriterFlag *abool.AtomicBool, logger Logger, path string) {
+func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan *MarkersList, failedWriterFlag *abool.AtomicBool, logger Logger, path string) {
 	markersBuffer := MarkersList{}
 	//var i int64
 	//var total int64
@@ -274,7 +274,7 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *MarkersList, fail
 
 							if strings.HasPrefix(contentType, "text/html") {
 								customReader := getCharsetReader(reader, contentType)
-								pageLinks := getLinks(recordDate.Unix(), pageUrl, &normalizedPageUrl, customReader, logger, path, isSecure, invertedPageHost)
+								pageLinks := getLinks(dataOrigin, recordDate.Unix(), pageUrl, &normalizedPageUrl, customReader, logger, path, isSecure, invertedPageHost)
 								markersBuffer.appendList(pageLinks)
 							}
 
@@ -288,7 +288,8 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *MarkersList, fail
 						}
 
 						// Add the marker to know that the crawler visited the page
-						link := NewWebpageMarker(recordDate.Unix(), invertedPageHost, isSecure, normalizedPageUrl, httpStatusCode, extras)
+						link := NewWebpageMarker(recordDate.Unix(), invertedPageHost, isSecure,
+										normalizedPageUrl, httpStatusCode, extras, dataOrigin)
 						markersBuffer.append(&link)
 
 					}
@@ -302,7 +303,9 @@ func ReadWarc(recordsReader *warc.Reader, writersChannel chan *MarkersList, fail
 
 }
 
-func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, body io.Reader, logger Logger, path string, mainPageSecure bool, invertedPageHost string) *MarkersList {
+func getLinks(dataOrigin string, crawlingTime int64, pageUrl *url.URL,
+	normalizedPageUrl *string, body io.Reader, logger Logger, path string,
+	mainPageSecure bool, invertedPageHost string) *MarkersList {
 
 	exceptionsSource := "GetLinks in " + pageUrl.String()
 
@@ -368,7 +371,8 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 							normalizedHrefValue,
 							fragment,
 							token.Data,
-							extrasString)
+							extrasString,
+							dataOrigin)
 
 						pageLinks.append(&link)
 					} else {
@@ -437,7 +441,8 @@ func getLinks(crawlingTime int64, pageUrl *url.URL, normalizedPageUrl *string, b
 							normalizedHrefValue,
 							fragment,
 							token.Data,
-							extrasValue)
+							extrasValue,
+							dataOrigin)
 
 						pageLinks.append(&link)
 					}

@@ -20,9 +20,17 @@ func main() {
 	//	log.Println(http.ListenAndServe(":6060", nil))
 	//}()
 
+	if len(os.Args) < 5 {
+		fmt.Println("Missing parameters...")
+		fmt.Println("Format: ./Sequencer <input_file> <output_path> <workers_count> <data_origin_name>")
+		os.Exit(-1)
+	}
+
 	inputFile := os.Args[1]
 	outputPath := os.Args[2]
 	workersCount, _ := strconv.ParseInt(os.Args[3], 10, 32)
+
+	dataOrigin := os.Args[4]
 
 	lines, err := readLines(inputFile)
 	if err != nil {
@@ -48,7 +56,7 @@ func main() {
 
 	for w := 1; w <= int(workersCount); w++ {
 		workersWaitGroup.Add(1)
-		go LinkExtractionWorker(pathsChannel, &workersWaitGroup, logger)
+		go LinkExtractionWorker(dataOrigin, pathsChannel, &workersWaitGroup, logger)
 	}
 
 	for _, line := range lines {
