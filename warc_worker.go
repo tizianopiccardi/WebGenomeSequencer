@@ -256,15 +256,21 @@ func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan
 							line := string(lineBytes)
 
 							if strings.HasPrefix(line, "HTTP/") {
-								httpStatusCode = line[9:12]
+								if len(line) >=12 {
+									httpStatusCode = line[9:12]
+								}
 							}
 
 							if strings.HasPrefix(line, "Location:") {
-								redirectLocation = line[10:]
+								if len(line) >= 10 {
+									redirectLocation = line[10:]
+								}
 							}
 
 							if strings.HasPrefix(line, "Content-Type:") {
-								contentType = line[14:]
+								if len(line)>=14 {
+									contentType = line[14:]
+								}
 							}
 
 						}
