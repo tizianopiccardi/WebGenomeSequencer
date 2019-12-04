@@ -32,18 +32,18 @@ func main() {
 		os.Exit(-1)
 	}
 
-	fmt.Println("urlPrefix =", urlPrefix)
+	fmt.Println("urlPrefix =", *urlPrefix)
 
-	inputFile := flag.Args()[1]
+	inputFile := flag.Args()[0]
 	fmt.Println("inputFile =", inputFile)
 
-	outputPath := flag.Args()[2]
+	outputPath := flag.Args()[1]
 	fmt.Println("outputPath =", outputPath)
 
-	workersCount, _ := strconv.ParseInt(flag.Args()[3], 10, 32)
+	workersCount, _ := strconv.ParseInt(flag.Args()[2], 10, 32)
 	fmt.Println("workersCount =", workersCount)
 
-	dataOrigin := flag.Args()[4]
+	dataOrigin := flag.Args()[3]
 	fmt.Println("dataOrigin =", dataOrigin)
 
 	lines, err := readLines(inputFile)
