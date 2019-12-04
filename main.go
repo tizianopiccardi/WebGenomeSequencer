@@ -21,19 +21,22 @@ func main() {
 	//	log.Println(http.ListenAndServe(":6060", nil))
 	//}()
 
-	if len(os.Args) < 5 {
+
+
+	urlPrefix := flag.String("urlPrefix", "", "Prefix for WARC URLs")
+	flag.Parse()
+
+	if len(flag.Args()) < 5 {
 		fmt.Println("Missing parameters...")
-		fmt.Println("Format: ./Sequencer <input_file> <output_path> <workers_count> <data_origin_name>")
+		fmt.Println("Format: ./Sequencer [-urlPrefix prefix] <input_file> <output_path> <workers_count> <data_origin_name>")
 		os.Exit(-1)
 	}
 
-	urlPrefix := flag.String("urlPrefix", "", "Prefix for WARC URLs")
+	inputFile := flag.Args()[1]
+	outputPath := flag.Args()[2]
+	workersCount, _ := strconv.ParseInt(flag.Args()[3], 10, 32)
 
-	inputFile := os.Args[1]
-	outputPath := os.Args[2]
-	workersCount, _ := strconv.ParseInt(os.Args[3], 10, 32)
-
-	dataOrigin := os.Args[4]
+	dataOrigin := flag.Args()[4]
 
 	lines, err := readLines(inputFile)
 	if err != nil {
@@ -58,6 +61,7 @@ func main() {
 	go logger.run()
 
 	for w := 1; w <= int(workersCount); w++ {
+		fmt.Println(dataOrigin, pathsChannel, &workersWaitGroup, logger)
 		workersWaitGroup.Add(1)
 		go LinkExtractionWorker(dataOrigin, pathsChannel, &workersWaitGroup, logger)
 	}

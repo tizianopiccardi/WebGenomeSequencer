@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"github.com/PuerkitoBio/purell"
 	"github.com/slyrz/warc"
 	"github.com/tevino/abool"
@@ -61,6 +62,7 @@ func getCharsetReader(reader *bufio.Reader, contentType string) io.Reader {
 }
 
 func getReader(path string) (io.ReadCloser, error) {
+
 	if isValidUrl(path) {
 
 		resp, err := http.Get(path)
@@ -69,7 +71,7 @@ func getReader(path string) (io.ReadCloser, error) {
 		}
 		return resp.Body, nil
 	} else {
-		//fmt.Print("HERE")
+		fmt.Println("URL is not valid:", path)
 		file, err := os.Open(path)
 		if err != nil {
 			return nil, err
