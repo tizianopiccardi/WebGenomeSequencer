@@ -26,17 +26,25 @@ func main() {
 	urlPrefix := flag.String("urlPrefix", "", "Prefix for WARC URLs")
 	flag.Parse()
 
-	if len(flag.Args()) < 5 {
-		fmt.Println("Missing parameters...")
+	if len(flag.Args()) < 4 {
+		fmt.Println("Missing parameters...", flag.Args())
 		fmt.Println("Format: ./Sequencer [-urlPrefix prefix] <input_file> <output_path> <workers_count> <data_origin_name>")
 		os.Exit(-1)
 	}
 
+	fmt.Println("urlPrefix =", urlPrefix)
+
 	inputFile := flag.Args()[1]
+	fmt.Println("inputFile =", inputFile)
+
 	outputPath := flag.Args()[2]
+	fmt.Println("outputPath =", outputPath)
+
 	workersCount, _ := strconv.ParseInt(flag.Args()[3], 10, 32)
+	fmt.Println("workersCount =", workersCount)
 
 	dataOrigin := flag.Args()[4]
+	fmt.Println("dataOrigin =", dataOrigin)
 
 	lines, err := readLines(inputFile)
 	if err != nil {
