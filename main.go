@@ -69,7 +69,7 @@ func main() {
 	go logger.run()
 
 	for w := 1; w <= int(workersCount); w++ {
-		fmt.Println(dataOrigin, pathsChannel, &workersWaitGroup, logger)
+		//fmt.Println(dataOrigin, pathsChannel, &workersWaitGroup, logger)
 		workersWaitGroup.Add(1)
 		go LinkExtractionWorker(dataOrigin, pathsChannel, &workersWaitGroup, logger)
 	}

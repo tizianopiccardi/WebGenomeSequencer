@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/PuerkitoBio/purell"
+	"github.com/mxk/go-flowrate/flowrate"
 	"github.com/slyrz/warc"
 	"github.com/tevino/abool"
 	"github.com/xitongsys/parquet-go-source/local"
@@ -21,7 +22,7 @@ import (
 	"time"
 )
 
-const CHUNK_SIZE = 500000
+const CHUNK_SIZE = 50000
 
 //var locationRegex *regexp.Regexp = regexp.MustCompile(`\nLocation: ([^\n]*)\n`)
 
@@ -69,7 +70,7 @@ func getReader(path string) (io.ReadCloser, error) {
 		if err != nil {
 			return nil, err
 		}
-		return resp.Body, nil
+		return flowrate.NewReader(resp.Body, 1024*1024*10), nil
 	} else {
 		fmt.Println("URL is not valid:", path)
 		file, err := os.Open(path)
