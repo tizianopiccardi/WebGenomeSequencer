@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -25,6 +26,8 @@ func main() {
 		fmt.Println("Format: ./Sequencer <input_file> <output_path> <workers_count> <data_origin_name>")
 		os.Exit(-1)
 	}
+
+	urlPrefix := flag.String("urlPrefix", "", "Prefix for WARC URLs")
 
 	inputFile := os.Args[1]
 	outputPath := os.Args[2]
@@ -60,7 +63,7 @@ func main() {
 	}
 
 	for _, line := range lines {
-		sourceWarc := line
+		sourceWarc := *urlPrefix + line
 		//fmt.Println(sourceWarc)
 		file := filepath.Base(sourceWarc)
 		pathsChannel <- SourceDestination{SourceFile: sourceWarc, DestinationFile: outputPath + "/" + file + ".parquet"}
