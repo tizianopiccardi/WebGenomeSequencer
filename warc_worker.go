@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/PuerkitoBio/purell"
-	"github.com/mxk/go-flowrate/flowrate"
 	"github.com/slyrz/warc"
 	"github.com/tevino/abool"
 	"github.com/xitongsys/parquet-go-source/local"
@@ -70,7 +69,7 @@ func getReader(path string) (io.ReadCloser, error) {
 		if err != nil {
 			return nil, err
 		}
-		return flowrate.NewReader(resp.Body, 1024*1024*10), nil
+		return resp.Body, nil
 	} else {
 		fmt.Println("URL is not valid:", path)
 		file, err := os.Open(path)

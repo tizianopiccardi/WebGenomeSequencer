@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -11,17 +12,13 @@ import (
 	"time"
 )
 
-//import _ "net/http/pprof"
-
-//const BASE_URL = "https://commoncrawl.s3.amazonaws.com/"
+import _ "net/http/pprof"
 
 func main() {
 
-	//go func() {
-	//	log.Println(http.ListenAndServe(":6060", nil))
-	//}()
-
-
+	go func() {
+		log.Println(http.ListenAndServe(":6060", nil))
+	}()
 
 	urlPrefix := flag.String("urlPrefix", "", "Prefix for WARC URLs")
 	flag.Parse()
