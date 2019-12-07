@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/trace"
 	"strconv"
 	"sync"
 	"time"
@@ -19,6 +20,21 @@ func main() {
 	go func() {
 		log.Println(http.ListenAndServe(":6060", nil))
 	}()
+
+	f, err := os.Create("trace.out")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	err = trace.Start(f)
+	if err != nil {
+		panic(err)
+	}
+	defer trace.Stop()
+
+
+	// END OF PROFILING
 
 	urlPrefix := flag.String("urlPrefix", "", "Prefix for WARC URLs")
 	flag.Parse()
