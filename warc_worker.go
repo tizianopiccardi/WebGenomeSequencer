@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"github.com/PuerkitoBio/purell"
 	"github.com/slyrz/warc"
 	"github.com/tevino/abool"
@@ -13,7 +12,6 @@ import (
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/charset"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -21,9 +19,7 @@ import (
 	"time"
 )
 
-const CHUNK_SIZE = 50000
-
-//var locationRegex *regexp.Regexp = regexp.MustCompile(`\nLocation: ([^\n]*)\n`)
+const CHUNK_SIZE = 500000
 
 const PURELL_FLAGS = purell.FlagsUsuallySafeGreedy |
 	purell.FlagForceHTTP |
@@ -46,14 +42,14 @@ type SourceDestination struct {
 	DestinationFile string
 }
 
-func isValidUrl(toTest string) bool {
-	u, _ := url.ParseRequestURI(toTest)
-	if u.Host == "" {
-		return false
-	} else {
-		return true
-	}
-}
+//func isValidUrl(toTest string) bool {
+//	u, _ := url.ParseRequestURI(toTest)
+//	if u.Host == "" {
+//		return false
+//	} else {
+//		return true
+//	}
+//}
 
 func getCharsetReader(reader *bufio.Reader, contentType string) io.Reader {
 	bodySample, _ := reader.Peek(1024)
@@ -63,26 +59,27 @@ func getCharsetReader(reader *bufio.Reader, contentType string) io.Reader {
 
 func getReader(path string) (io.ReadCloser, error) {
 
-	if isValidUrl(path) {
-
-		resp, err := http.Get(path)
-		if err != nil {
-			return nil, err
-		}
-		return resp.Body, nil
-	} else {
-		fmt.Println("URL is not valid:", path)
+	//if isValidUrl(path) {
+	//
+	//	resp, err := http.Get(path)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	return resp.Body, nil
+	//} else {
+	//	fmt.Println("URL is not valid:", path)
 		file, err := os.Open(path)
 		if err != nil {
 			return nil, err
 		}
 		return file, nil
-	}
+	//}
 
-	return nil, errors.New("URL/path not valid: " + path)
+	return nil, errors.New("Path not valid: " + path)
 }
 
-func LinkExtractionWorker(dataOrigin string, paths chan SourceDestination, workersWaitGroup *sync.WaitGroup, logger Logger) {
+func LinkExtractionWorker(dataOrigin string, paths chan SourceDestination,
+	workersWaitGroup *sync.WaitGroup, logger Logger) {
 
 	exceptionsSource := ""
 
@@ -163,7 +160,6 @@ func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan
 			// If the writer is dead, stop the reader
 			if failedWriterFlag.IsSet() {
 				//LOG FAILED
-				//fmt.Println("WRITER FAILED")
 				logger.Exceptions <- Exception{
 					File:      path,
 					Source:    exceptionsSource,
@@ -212,7 +208,6 @@ func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan
 					originalUrl = strings.Replace(strings.TrimSpace(originalUrl), "\n", "", -1)
 					pageUrl, err := url.Parse(originalUrl)
 
-
 					if err != nil {
 						logger.Exceptions <- Exception{
 							File:            path,
@@ -237,7 +232,6 @@ func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan
 
 						invertedPageHost := strings.Join(pageHostParts, ".")
 
-
 						normalizedPageUrl := purell.NormalizeURL(pageUrl, PURELL_FLAGS)
 
 						reader := bufio.NewReader(record.Content)
@@ -258,7 +252,7 @@ func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan
 							line := string(lineBytes)
 
 							if strings.HasPrefix(line, "HTTP/") {
-								if len(line) >=12 {
+								if len(line) >= 12 {
 									httpStatusCode = line[9:12]
 								}
 							}
@@ -270,7 +264,7 @@ func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan
 							}
 
 							if strings.HasPrefix(line, "Content-Type:") {
-								if len(line)>=14 {
+								if len(line) >= 14 {
 									contentType = line[14:]
 								}
 							}
@@ -297,7 +291,7 @@ func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan
 
 						// Add the marker to know that the crawler visited the page
 						link := NewWebpageMarker(recordDate.Unix(), invertedPageHost, isSecure,
-										normalizedPageUrl, httpStatusCode, extras, dataOrigin)
+							normalizedPageUrl, httpStatusCode, extras, dataOrigin)
 						markersBuffer.append(&link)
 
 					}
@@ -535,35 +529,3 @@ func WriteParquet(destination string, writersChannel chan *MarkersList, failed *
 
 	done <- true
 }
-
-//
-//func WriteJson(destination string, writersChannel chan *LinksBuffer, failed *abool.AtomicBool, done chan bool) {
-//
-//	fmt.Println("Write in", destination)
-//	f, err := os.Create(destination + ".gzip")
-//
-//	if err != nil {
-//		failed.Set()
-//	} else {
-//		// Create gzip writer.
-//		w := gzip.NewWriter(f)
-//
-//		for linksChunk := range writersChannel {
-//			fmt.Println("New write request:", linksChunk.length, "links")
-//			for node := linksChunk.head; node != nil; node = node.next {
-//
-//				linkJson, err := json.Marshal(node.Link)
-//				if err != nil {
-//					failed.Set()
-//					break
-//				}
-//				w.Write(linkJson)
-//				w.Write([]byte("\n"))
-//			}
-//		}
-//
-//		w.Close()
-//	}
-//
-//	done <- true
-//}

@@ -8,15 +8,14 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/trace"
-	"strconv"
 	"sync"
 	"time"
 )
 
 import _ "net/http/pprof"
 
-func main() {
 
+func enableDebugTools() {
 	go func() {
 		log.Println(http.ListenAndServe(":6060", nil))
 	}()
@@ -32,41 +31,62 @@ func main() {
 		panic(err)
 	}
 	defer trace.Stop()
+}
 
 
-	// END OF PROFILING
+func main() {
+
+
 
 	urlPrefix := flag.String("urlPrefix", "", "Prefix for WARC URLs")
+	workersCount := flag.Int("workersCount", 1, "Number of workers")
+	tempDirectory := flag.String("tempDirectory", "/tmp", "Cache to download the warc files")
+
+	enableDebug := flag.Bool("debug", false, "Enable HTTP profile (port 6060) and trace")
+
 	flag.Parse()
 
-	if len(flag.Args()) < 4 {
+	if len(flag.Args()) < 3 {
 		fmt.Println("Missing parameters...", flag.Args())
-		fmt.Println("Format: ./Sequencer [-urlPrefix prefix] <input_file> <output_path> <workers_count> <data_origin_name>")
+		fmt.Println("Format: ./Sequencer [-urlPrefix prefix] [-workersCount 1] [-tempDirectory /tmp] <input_file> <output_path> <data_origin_name>")
 		os.Exit(-1)
 	}
 
-	fmt.Println("urlPrefix =", *urlPrefix)
-
 	inputFile := flag.Args()[0]
-	fmt.Println("inputFile =", inputFile)
-
 	outputPath := flag.Args()[1]
+	dataOrigin := flag.Args()[2]
+
+	fmt.Println("inputFile =", inputFile)
+	fmt.Println("tempDirectory =", tempDirectory)
+	fmt.Println("urlPrefix =", *urlPrefix)
 	fmt.Println("outputPath =", outputPath)
-
-	workersCount, _ := strconv.ParseInt(flag.Args()[2], 10, 32)
-	fmt.Println("workersCount =", workersCount)
-
-	dataOrigin := flag.Args()[3]
+	fmt.Println("workersCount =", *workersCount)
 	fmt.Println("dataOrigin =", dataOrigin)
+
+	fmt.Println("enableDebug =", *enableDebug)
+
+	if *enableDebug {
+		enableDebugTools()
+		fmt.Println("Debug tools started")
+	}
 
 	lines, err := readLines(inputFile)
 	if err != nil {
 		log.Fatalf("readLines: %s", err)
 	}
+
+	// Create output path
 	err = os.MkdirAll(outputPath, os.ModePerm)
 	if err != nil {
 		log.Fatalf("Unable to create the output directory: %s", err)
 	}
+
+	// Create download cache
+	err = os.MkdirAll(*tempDirectory, os.ModePerm)
+	if err != nil {
+		log.Fatalf("Unable to create the cache directory: %s", err)
+	}
+
 
 	start := time.Now()
 
@@ -81,7 +101,7 @@ func main() {
 	}
 	go logger.run()
 
-	for w := 1; w <= int(workersCount); w++ {
+	for w := 1; w <= *workersCount; w++ {
 		//fmt.Println(dataOrigin, pathsChannel, &workersWaitGroup, logger)
 		workersWaitGroup.Add(1)
 		go LinkExtractionWorker(dataOrigin, pathsChannel, &workersWaitGroup, logger)
