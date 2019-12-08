@@ -2,7 +2,7 @@ package main
 
 import (
 	"bufio"
-	"errors"
+	"fmt"
 	"github.com/PuerkitoBio/purell"
 	"github.com/slyrz/warc"
 	"github.com/tevino/abool"
@@ -15,10 +15,8 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"sync"
 	"time"
 )
-
 const CHUNK_SIZE = 500000
 
 const PURELL_FLAGS = purell.FlagsUsuallySafeGreedy |
@@ -37,19 +35,7 @@ func getAbsoluteNormalized(pageUrl *url.URL, href string) (string, string) {
 	return "", fragment
 }
 
-type SourceDestination struct {
-	SourceFile      string
-	DestinationFile string
-}
 
-//func isValidUrl(toTest string) bool {
-//	u, _ := url.ParseRequestURI(toTest)
-//	if u.Host == "" {
-//		return false
-//	} else {
-//		return true
-//	}
-//}
 
 func getCharsetReader(reader *bufio.Reader, contentType string) io.Reader {
 	bodySample, _ := reader.Peek(1024)
@@ -57,102 +43,73 @@ func getCharsetReader(reader *bufio.Reader, contentType string) io.Reader {
 	return encoding.NewDecoder().Reader(reader)
 }
 
-func getReader(path string) (io.ReadCloser, error) {
+func LinkExtractionWorker(inputWarcFile, outputParquet, dataOrigin string, logger Logger) {
 
-	//if isValidUrl(path) {
-	//
-	//	resp, err := http.Get(path)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	return resp.Body, nil
-	//} else {
-	//	fmt.Println("URL is not valid:", path)
-		file, err := os.Open(path)
-		if err != nil {
-			return nil, err
+	fileReader, err := os.Open(inputWarcFile)
+	if err != nil {
+		logger.Exceptions <- Exception{
+			ErrorType:       "File not found",
+			Message:         inputWarcFile,
+			OriginalMessage: err.Error(),
 		}
-		return file, nil
-	//}
+		panic(err)
 
-	return nil, errors.New("Path not valid: " + path)
-}
+	} else {
 
-func LinkExtractionWorker(dataOrigin string, paths chan SourceDestination,
-	workersWaitGroup *sync.WaitGroup, logger Logger) {
-
-	exceptionsSource := ""
-
-	for path := range paths {
-
-		fileReader, err := getReader(path.SourceFile)
+		recordsReader, err := warc.NewReader(fileReader)
 		if err != nil {
 			logger.Exceptions <- Exception{
-				File:            path.SourceFile,
-				Source:          exceptionsSource,
-				ErrorType:       "File not found",
-				Message:         path.SourceFile,
+				//File:            sourceFile,
+				//Source:          exceptionsSource,
+				ErrorType:       "WARC Reader failed",
+				Message:         inputWarcFile,
 				OriginalMessage: err.Error(),
 			}
+			panic(err)
 
 		} else {
 
-			logger.FileStartChannel <- path
 
-			recordsReader, err := warc.NewReader(fileReader)
-			if err != nil {
-				logger.Exceptions <- Exception{
-					File:            path.SourceFile,
-					Source:          exceptionsSource,
-					ErrorType:       "WARC Reader failed",
-					Message:         path.SourceFile,
-					OriginalMessage: err.Error(),
-				}
 
-			} else {
 
-				// Channel to share the chucks to write
-				writerChannel := make(chan *MarkersList, 150)
+			// Channel to share the chucks to write
+			writerChannel := make(chan *MarkersList, 150)
 
-				// Synchronized boolean var to inform the reader if the writer filed
-				failedWriterFlag := abool.New()
+			// Synchronized boolean var to inform the reader if the writer failed
+			failedWriterFlag := abool.New()
 
-				// Get a message when the writer completed the job
-				writerDone := make(chan bool)
+			// Get a message when the writer completed the job
+			writerDone := make(chan bool)
 
-				// - The writer runs waiting from links chunks from the channel
-				// - If it fails, it sets the failedWriterFlag to TRUE and log the error
-				// - The reader checks regularly the flag, if it's TRUE: break
-				go WriteParquet(path.DestinationFile, writerChannel, failedWriterFlag, writerDone, logger)
+			// - The writer runs waiting from links chunks from the channel
+			// - If it fails, it sets the failedWriterFlag to TRUE and log the error
+			// - The reader checks regularly the flag, if it's TRUE: break
+			go WriteParquet(outputParquet, writerChannel, failedWriterFlag, writerDone, logger)
 
-				ReadWarc(dataOrigin, recordsReader, writerChannel, failedWriterFlag, logger, path.SourceFile)
+			ReadWarc(dataOrigin, recordsReader, writerChannel, failedWriterFlag, logger)
 
-				// The reader ended, the file if completely processed and we can
-				// inform the writer by closing the channel
-				close(writerChannel)
+			// The reader ended, the file if completely processed and we can
+			// inform the writer by closing the channel
+			close(writerChannel)
 
-				// Wait for the writer to complete
-				<-writerDone
+			// Wait for the writer to complete
+			<-writerDone
 
-			}
-
-			recordsReader.Close()
-			fileReader.Close()
-
-			logger.FileEndChannel <- path
 		}
+
+		recordsReader.Close()
+		fileReader.Close()
 
 	}
 
-	workersWaitGroup.Done()
 }
 
-func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan *MarkersList, failedWriterFlag *abool.AtomicBool, logger Logger, path string) {
-	markersBuffer := MarkersList{}
-	//var i int64
-	//var total int64
 
-	exceptionsSource := "Reader " + path
+
+
+func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan *MarkersList,
+	failedWriterFlag *abool.AtomicBool, logger Logger) {
+	markersBuffer := MarkersList{}
 
 	for {
 		if markersBuffer.length >= CHUNK_SIZE {
@@ -161,8 +118,8 @@ func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan
 			if failedWriterFlag.IsSet() {
 				//LOG FAILED
 				logger.Exceptions <- Exception{
-					File:      path,
-					Source:    exceptionsSource,
+					//File:      path,
+					//Source:    exceptionsSource,
 					ErrorType: "Reader controlled failure",
 					Message:   "The writer failed and the reader is interrupting the job",
 				}
@@ -179,8 +136,8 @@ func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan
 		if err != nil {
 			if err != io.EOF {
 				logger.Exceptions <- Exception{
-					File:            path,
-					Source:          exceptionsSource,
+					//File:            path,
+					//Source:          exceptionsSource,
 					ErrorType:       "Record malformed",
 					Message:         "The reader failed to process the record",
 					OriginalMessage: err.Error(),
@@ -197,8 +154,6 @@ func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan
 				recordDate, err := time.Parse(time.RFC3339, record.Header.Get("warc-date"))
 				if err != nil {
 					logger.Exceptions <- Exception{
-						File:            path,
-						Source:          exceptionsSource,
 						ErrorType:       "Date parsing error",
 						Message:         record.Header.Get("warc-date"),
 						OriginalMessage: err.Error(),
@@ -210,8 +165,6 @@ func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan
 
 					if err != nil {
 						logger.Exceptions <- Exception{
-							File:            path,
-							Source:          exceptionsSource,
 							ErrorType:       "Not an URL",
 							Message:         originalUrl,
 							OriginalMessage: err.Error(),
@@ -276,7 +229,7 @@ func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan
 
 							if strings.HasPrefix(contentType, "text/html") {
 								customReader := getCharsetReader(reader, contentType)
-								pageLinks := getLinks(dataOrigin, recordDate.Unix(), pageUrl, &normalizedPageUrl, customReader, logger, path, isSecure, invertedPageHost)
+								pageLinks := getLinks(dataOrigin, recordDate.Unix(), pageUrl, &normalizedPageUrl, customReader, logger, isSecure, invertedPageHost)
 								markersBuffer.appendList(pageLinks)
 							}
 
@@ -305,11 +258,10 @@ func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan
 
 }
 
-func getLinks(dataOrigin string, crawlingTime int64, pageUrl *url.URL,
-	normalizedPageUrl *string, body io.Reader, logger Logger, path string,
-	mainPageSecure bool, invertedPageHost string) *MarkersList {
 
-	exceptionsSource := "GetLinks in " + pageUrl.String()
+func getLinks(dataOrigin string, crawlingTime int64, pageUrl *url.URL,
+	normalizedPageUrl *string, body io.Reader, logger Logger,
+	mainPageSecure bool, invertedPageHost string) *MarkersList {
 
 	//Links in the current page
 	pageLinks := MarkersList{}
@@ -330,6 +282,9 @@ func getLinks(dataOrigin string, crawlingTime int64, pageUrl *url.URL,
 				for _, attr := range token.Attr {
 					if attr.Key == "href" {
 						hrefValue = strings.Replace(strings.TrimSpace(attr.Val), "\n", "", -1)
+						hrefValue = strings.Replace(hrefValue, "\t", "", -1)
+						hrefValue = strings.Replace(hrefValue, "\r", "", -1)
+						hrefValue = strings.Replace(hrefValue, "\u0008", "", -1)
 						break
 					}
 				}
@@ -380,8 +335,7 @@ func getLinks(dataOrigin string, crawlingTime int64, pageUrl *url.URL,
 					} else {
 						//LINK NORMALIZATION FAILED
 						logger.Exceptions <- Exception{
-							File:      path,
-							Source:    exceptionsSource,
+							SourcePage: *normalizedPageUrl,
 							ErrorType: "Link normalization failed",
 							Message:   hrefValue,
 						}
@@ -466,20 +420,20 @@ func getLinks(dataOrigin string, crawlingTime int64, pageUrl *url.URL,
 	return &pageLinks
 }
 
-func WriteParquet(destination string, writersChannel chan *MarkersList, failed *abool.AtomicBool, done chan bool, logger Logger) {
 
-	exceptionsSource := "Writer " + destination
+func WriteParquet(destination string, writersChannel chan *MarkersList, failed *abool.AtomicBool, done chan bool, logger Logger) {
 
 	//fmt.Println("Write in", destination)
 	fw, err := local.NewLocalFileWriter(destination)
 	if err != nil {
 		failed.Set()
 		logger.Exceptions <- Exception{
-			Source:          exceptionsSource,
+			//Source:          exceptionsSource,
 			ErrorType:       "Write failed",
 			Message:         "Impossible to create the file",
 			OriginalMessage: err.Error(),
 		}
+		panic(err)
 		// LOG IMPOSSIBLE TO CREATE THE FILE
 	} else {
 		//write
@@ -487,6 +441,7 @@ func WriteParquet(destination string, writersChannel chan *MarkersList, failed *
 		if err != nil {
 			failed.Set()
 			// LOG IMPOSSIBLE TO CREATE THE FILE
+			panic(err)
 		} else {
 
 			pw.RowGroupSize = 128 * 1024 * 1024 //128M
@@ -495,18 +450,18 @@ func WriteParquet(destination string, writersChannel chan *MarkersList, failed *
 
 			// Iterate until it is open
 			for linksChunk := range writersChannel {
-				//fmt.Println("New write request:", linksChunk.length, "links")
+				fmt.Println("New write request:", linksChunk.length, "links")
 				for node := linksChunk.head; node != nil; node = node.next {
 					if err := pw.Write(node.Marker); err != nil {
 						failed.Set()
 						logger.Exceptions <- Exception{
-							Source:          exceptionsSource,
+							//Source:          exceptionsSource,
 							ErrorType:       "Write failed",
 							Message:         "Impossible to write the record",
 							OriginalMessage: err.Error(),
 						}
 						//LOG ERROR IN WRITING
-						break
+						panic(err)
 
 					}
 				}
@@ -515,12 +470,13 @@ func WriteParquet(destination string, writersChannel chan *MarkersList, failed *
 			if err := pw.WriteStop(); err != nil {
 				failed.Set()
 				logger.Exceptions <- Exception{
-					Source:          exceptionsSource,
+					//Source:          exceptionsSource,
 					ErrorType:       "Write failed",
 					Message:         "Impossible to finalize the file",
 					OriginalMessage: err.Error(),
 				}
 				// LOG IMPOSSIBLE TO FINALISE THE FILE
+				panic(err)
 			}
 			fw.Close()
 		}

@@ -4,6 +4,9 @@ webgenome/
 *.paths
 *.gz
 *.log
+*.out
+
+out/
 
 .idea/
 .ipynb_checkpoints/

@@ -1,60 +1,55 @@
 package main
 
 import (
+	"bufio"
+	"compress/gzip"
 	"encoding/json"
-	"fmt"
 	"os"
+	"sync"
 )
 
 type Exception struct {
-	File            string
-	Source          string
+	//File            string
+	SourcePage      string
 	ErrorType       string
 	Message         string
 	OriginalMessage string
 }
 
 type Logger struct {
-	LogsFileName   string
-	LogsFileWriter *os.File
 
-	CompletedFiles       string
-	CompletedFilesWriter *os.File
+	WarcPath string
 
-	FileStartChannel chan SourceDestination
-	FileEndChannel   chan SourceDestination
-	Exceptions       chan Exception
+	ErrorsFilePath   string
+	ErrorsFileName   string
+
+	ErrorsGZipFileWriter *gzip.Writer
+	ErrorsFileWriter *bufio.Writer
+
+	Exceptions chan Exception
+
+	writingMutex sync.Mutex
 }
 
-func NewLogger(fileName, completedFiles string) (Logger, error) {
-	logger := Logger{LogsFileName: fileName, CompletedFiles: completedFiles}
+func NewLogger(warcPath string, errorsPath string, errorsFileName string) (Logger, error) {
+	logger := Logger{WarcPath: warcPath, ErrorsFilePath: errorsPath, ErrorsFileName: errorsFileName}
 
-	logFile, err1 := os.Create(fileName)
-	cFile, err2 := os.Create(completedFiles)
-
-	if err1 != nil {
-		return logger, err1
-	}
-	if err2 != nil {
-		return logger, err2
+	logFile, err := os.Create(errorsPath+errorsFileName+".json.gz")
+	if err != nil {
+		return logger, err
 	}
 
-	logger.LogsFileWriter = logFile
-	logger.CompletedFilesWriter = cFile
-
-	logger.FileStartChannel = make(chan SourceDestination, 100)
-	logger.FileEndChannel = make(chan SourceDestination, 100)
+	logger.ErrorsGZipFileWriter = gzip.NewWriter(logFile)
+	logger.ErrorsFileWriter = bufio.NewWriter(logger.ErrorsGZipFileWriter)
 	logger.Exceptions = make(chan Exception, 100)
-
 	return logger, nil
 }
 
 func (logger Logger) quit() {
-
-	logger.LogsFileWriter.Sync()
-	logger.LogsFileWriter.Close()
-	logger.CompletedFilesWriter.Sync()
-	logger.CompletedFilesWriter.Close()
+	logger.writingMutex.Lock()
+	logger.ErrorsFileWriter.Flush()
+	logger.ErrorsGZipFileWriter.Close()
+	logger.writingMutex.Unlock()
 }
 
 func (logger Logger) run() {
@@ -62,16 +57,12 @@ func (logger Logger) run() {
 	for {
 		select {
 		case e := <-logger.Exceptions:
+			logger.writingMutex.Lock()
+			//e.File = logger.WarcPath
 			jsonError, _ := json.Marshal(e)
-			//fmt.Println(string(jsonError))
-			logger.LogsFileWriter.Write(jsonError)
-			logger.LogsFileWriter.Write([]byte("\n"))
-		case fileStarted := <-logger.FileStartChannel:
-			fmt.Println("New file started:", fileStarted.SourceFile)
-		case fileEnd := <-logger.FileEndChannel:
-			logger.CompletedFilesWriter.Write([]byte(fileEnd.SourceFile))
-			logger.CompletedFilesWriter.Write([]byte("\n"))
-			fmt.Println("File completed:", fileEnd.SourceFile)
+			logger.ErrorsFileWriter.Write(jsonError)
+			logger.ErrorsFileWriter.Write([]byte("\n"))
+			logger.writingMutex.Unlock()
 		}
 	}
 }
