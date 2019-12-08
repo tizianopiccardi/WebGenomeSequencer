@@ -142,6 +142,7 @@ func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan
 					Message:         "The reader failed to process the record",
 					OriginalMessage: err.Error(),
 				}
+				panic(err)
 			} else {
 				break
 			}
