@@ -35,6 +35,13 @@ func getAbsoluteNormalized(pageUrl *url.URL, href string) (string, string) {
 	return "", fragment
 }
 
+func sanitizeString(rawUrl string) string {
+	hrefValue := strings.Replace(strings.TrimSpace(rawUrl), "\n", "", -1)
+	hrefValue = strings.Replace(hrefValue, "\t", "", -1)
+	hrefValue = strings.Replace(hrefValue, "\r", "", -1)
+	hrefValue = strings.Replace(hrefValue, "\u0008", "", -1)
+	return hrefValue
+}
 
 
 func getCharsetReader(reader *bufio.Reader, contentType string) io.Reader {
@@ -161,7 +168,7 @@ func ReadWarc(dataOrigin string, recordsReader *warc.Reader, writersChannel chan
 					}
 				} else {
 					originalUrl := record.Header.Get("WARC-Target-URI")
-					originalUrl = strings.Replace(strings.TrimSpace(originalUrl), "\n", "", -1)
+					originalUrl = sanitizeString(originalUrl)
 					pageUrl, err := url.Parse(originalUrl)
 
 					if err != nil {
@@ -282,10 +289,11 @@ func getLinks(dataOrigin string, crawlingTime int64, pageUrl *url.URL,
 				var hrefValue string
 				for _, attr := range token.Attr {
 					if attr.Key == "href" {
-						hrefValue = strings.Replace(strings.TrimSpace(attr.Val), "\n", "", -1)
-						hrefValue = strings.Replace(hrefValue, "\t", "", -1)
-						hrefValue = strings.Replace(hrefValue, "\r", "", -1)
-						hrefValue = strings.Replace(hrefValue, "\u0008", "", -1)
+						//hrefValue = strings.Replace(strings.TrimSpace(attr.Val), "\n", "", -1)
+						//hrefValue = strings.Replace(hrefValue, "\t", "", -1)
+						//hrefValue = strings.Replace(hrefValue, "\r", "", -1)
+						//hrefValue = strings.Replace(hrefValue, "\u0008", "", -1)
+						hrefValue = sanitizeString(attr.Val)
 						break
 					}
 				}
