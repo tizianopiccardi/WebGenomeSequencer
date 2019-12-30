@@ -453,9 +453,9 @@ func WriteParquet(destination string, writersChannel chan *MarkersList, failed *
 			panic(err)
 		} else {
 
-			pw.RowGroupSize = 16 * 1024 * 1024 //16M
+			pw.RowGroupSize = 8 * 1024 * 1024
 			pw.CompressionType = parquet.CompressionCodec_GZIP
-			pw.PageSize = 4 * 1024 * 1024
+			pw.PageSize = 2 * 1024 * 1024
 
 			// Iterate until it is open
 			for linksChunk := range writersChannel {
